@@ -49,15 +49,6 @@ export default function AdminLayout({ children, onLogout }) {
           </ul>
         </nav>
         <div className="p-4 border-t border-gray-800 space-y-2">
-          <Link to="/">
-            <Button
-              variant="outline"
-              className="w-full flex items-center gap-2 border-gray-700 text-gray-300 hover:bg-gray-800"
-            >
-              <Home className="w-4 h-4" />
-              Về trang chính
-            </Button>
-          </Link>
           <Button
             onClick={onLogout}
             variant="outline"

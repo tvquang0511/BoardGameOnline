@@ -6,19 +6,24 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gamepad2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAuth } from '../../context/AuthContext';
 
-export default function Login({ onLogin }) {
+export default function Login() {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Mock login logic
+    // Mock: bạn muốn admin chỉ cần email => giữ nguyên yêu cầu đó
     const isAdmin = email === 'admin@game.com';
-    onLogin(isAdmin);
-    navigate(isAdmin ? '/admin' : '/');
+
+    // Gọi auth.login và chờ promise resolve trước khi navigate (fix race condition)
+    auth.login(isAdmin).then(() => {
+      navigate(isAdmin ? '/admin' : '/');
+    });
   };
 
   return (
@@ -58,8 +63,8 @@ export default function Login({ onLogin }) {
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="remember" 
+              <Checkbox
+                id="remember"
                 checked={rememberMe}
                 onCheckedChange={(checked) => setRememberMe(checked)}
               />
