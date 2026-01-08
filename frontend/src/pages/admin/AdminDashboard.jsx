@@ -1,34 +1,58 @@
+import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Gamepad2, TrendingUp, Activity } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { adminApi } from '../../api/admin.api';
 
 export default function AdminDashboard({ onLogout }) {
-  const stats = [
-    { name: 'Tổng người dùng', value: '12,345', change: '+12%', icon: Users, color: 'from-blue-400 to-blue-600' },
-    { name: 'Game đang chơi', value: '1,234', change: '+5%', icon: Gamepad2, color: 'from-green-400 to-green-600' },
-    { name: 'Người dùng hoạt động', value: '8,765', change: '+8%', icon: Activity, color: 'from-purple-400 to-purple-600' },
-    { name: 'Tỷ lệ tăng trưởng', value: '23%', change: '+3%', icon: TrendingUp, color: 'from-orange-400 to-orange-600' },
-  ];
+  const [statsResp, setStatsResp] = useState(null);
+  const [growthResp, setGrowthResp] = useState(null);
 
-  const userGrowthData = [
-    { month: 'T1', users: 4000 },
-    { month: 'T2', users: 5200 },
-    { month: 'T3', users: 6800 },
-    { month: 'T4', users: 8100 },
-    { month: 'T5', users: 9500 },
-    { month: 'T6', users: 12345 },
-  ];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [s, g] = await Promise.all([adminApi.stats(), adminApi.userGrowth(6)]);
+        if (!mounted) return;
+        setStatsResp(s);
+        setGrowthResp(g);
+      } catch {
+        // TODO(API): error state
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
-  const gamePopularityData = [
-    { game: 'Cờ Caro', plays: 4500 },
-    { game: 'Tic-Tac-Toe', plays: 3800 },
-    { game: 'Rắn săn mồi', plays: 3200 },
-    { game: 'Match 3', plays: 2900 },
-    { game: 'Candy Rush', plays: 2400 },
-  ];
+  const stats = useMemo(() => {
+    const users = statsResp?.users ?? 0;
+    const gameSessions = statsResp?.game_sessions ?? statsResp?.sessions ?? 0;
+    const authSessions = statsResp?.auth_sessions ?? 0;
+
+    return [
+      { name: 'Tổng người dùng', value: users.toLocaleString(), change: '—', icon: Users, color: 'from-blue-400 to-blue-600' },
+      { name: 'Game sessions', value: gameSessions.toLocaleString(), change: '—', icon: Gamepad2, color: 'from-green-400 to-green-600' },
+      { name: 'Auth sessions', value: authSessions.toLocaleString(), change: '—', icon: Activity, color: 'from-purple-400 to-purple-600' },
+      { name: 'Tỷ lệ tăng trưởng', value: '—', change: '—', icon: TrendingUp, color: 'from-orange-400 to-orange-600' }, // TODO(API MISSING)
+    ];
+  }, [statsResp]);
+
+  const userGrowthData = useMemo(() => {
+    const months = growthResp?.months || [];
+    // map YYYY-MM -> Tn (rough)
+    return months.map((m) => ({
+      month: m.month,
+      users: m.cumulative,
+    }));
+  }, [growthResp]);
+
+  const gamePopularityData = useMemo(() => {
+    const top = statsResp?.topGames || [];
+    return top.map((g) => ({ game: g.name, plays: Number(g.plays || 0) }));
+  }, [statsResp]);
 
   const recentActivities = [
+    // TODO(API MISSING): audit_logs API endpoint
     { user: 'GamePro', action: 'đăng ký tài khoản mới', time: '5 phút trước' },
     { user: 'CoolGamer99', action: 'đạt thành tựu Master Player', time: '12 phút trước' },
     { user: 'ProPlayer123', action: 'lên level 30', time: '25 phút trước' },
@@ -44,7 +68,6 @@ export default function AdminDashboard({ onLogout }) {
           <p className="text-gray-600">Tổng quan hệ thống</p>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat) => {
             const Icon = stat.icon;
@@ -68,7 +91,6 @@ export default function AdminDashboard({ onLogout }) {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* User Growth Chart */}
           <Card>
             <CardHeader>
               <CardTitle>Tăng trưởng người dùng</CardTitle>
@@ -87,7 +109,6 @@ export default function AdminDashboard({ onLogout }) {
             </CardContent>
           </Card>
 
-          {/* Game Popularity Chart */}
           <Card>
             <CardHeader>
               <CardTitle>Độ phổ biến game</CardTitle>
@@ -107,11 +128,12 @@ export default function AdminDashboard({ onLogout }) {
           </Card>
         </div>
 
-        {/* Recent Activities */}
         <Card>
           <CardHeader>
             <CardTitle>Hoạt động gần đây</CardTitle>
-            <CardDescription>Các hoạt động mới nhất trên hệ thống</CardDescription>
+            <CardDescription>
+              Các hoạt động mới nhất trên hệ thống (TODO(API MISSING): audit_logs endpoint)
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">

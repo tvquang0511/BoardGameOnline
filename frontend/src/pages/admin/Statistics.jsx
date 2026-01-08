@@ -1,53 +1,56 @@
+import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
 } from 'recharts';
+import { adminApi } from '../../api/admin.api';
 
 export default function Statistics({ onLogout }) {
-  const dailyActiveUsers = [
-    { date: 'T2', users: 3200 },
-    { date: 'T3', users: 3800 },
-    { date: 'T4', users: 4100 },
-    { date: 'T5', users: 4500 },
-    { date: 'T6', users: 5200 },
-    { date: 'T7', users: 6800 },
-    { date: 'CN', users: 7200 },
-  ];
+  const [dau, setDau] = useState([]);
+  const [hours, setHours] = useState([]);
+  const [distribution, setDistribution] = useState([]);
 
-  const gameSessionsData = [
-    { hour: '00:00', sessions: 120 },
-    { hour: '04:00', sessions: 80 },
-    { hour: '08:00', sessions: 350 },
-    { hour: '12:00', sessions: 680 },
-    { hour: '16:00', sessions: 920 },
-    { hour: '20:00', sessions: 1250 },
-    { hour: '23:00', sessions: 580 },
-  ];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [d, h, g] = await Promise.all([
+          adminApi.dau(7),
+          adminApi.sessionsByHour(),
+          adminApi.gameDistribution(),
+        ]);
+        if (!mounted) return;
+        setDau(d.days || []);
+        setHours(h.hours || []);
+        setDistribution(g.distribution || []);
+      } catch {
+        // TODO(API): error state
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
-  const gameDistribution = [
-    { name: 'Cờ Caro', value: 35 },
-    { name: 'Tic-Tac-Toe', value: 25 },
-    { name: 'Rắn săn mồi', value: 20 },
-    { name: 'Match 3', value: 12 },
-    { name: 'Khác', value: 8 },
-  ];
+  const dailyActiveUsers = useMemo(() => {
+    // UI expects date like "T2" ... keep UI but map iso date
+    return dau.map((x) => ({ date: x.date, users: x.users }));
+  }, [dau]);
 
+  const gameSessionsData = useMemo(() => {
+    // backend returns hour:0-23
+    return hours.map((x) => ({
+      hour: String(x.hour).padStart(2, '0') + ':00',
+      sessions: x.count,
+    }));
+  }, [hours]);
+
+  const gameDistribution = useMemo(() => {
+    return distribution.map((x) => ({ name: x.name, value: x.plays }));
+  }, [distribution]);
+
+  // TODO(API MISSING): revenue/engagement
   const revenueData = [
     { month: 'T1', revenue: 12000, users: 4000 },
     { month: 'T2', revenue: 15000, users: 5200 },
@@ -80,7 +83,7 @@ export default function Statistics({ onLogout }) {
               <Card>
                 <CardHeader>
                   <CardTitle>Người dùng hoạt động hàng ngày</CardTitle>
-                  <CardDescription>Tuần này</CardDescription>
+                  <CardDescription>7 ngày gần đây</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -98,9 +101,10 @@ export default function Statistics({ onLogout }) {
               <Card>
                 <CardHeader>
                   <CardTitle>Phân bổ người dùng</CardTitle>
-                  <CardDescription>Theo độ tuổi và giới tính</CardDescription>
+                  <CardDescription>TODO(API MISSING): cần bảng demographic</CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {/* giữ nguyên UI mock */}
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between mb-2">
@@ -177,7 +181,7 @@ export default function Statistics({ onLogout }) {
               <Card>
                 <CardHeader>
                   <CardTitle>Phiên chơi theo giờ</CardTitle>
-                  <CardDescription>Số lượng phiên chơi trong ngày</CardDescription>
+                  <CardDescription>Login sessions theo giờ (24h)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -198,7 +202,7 @@ export default function Statistics({ onLogout }) {
             <Card>
               <CardHeader>
                 <CardTitle>Doanh thu & Người dùng</CardTitle>
-                <CardDescription>6 tháng gần đây</CardDescription>
+                <CardDescription>TODO(API MISSING): chưa có revenue</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={400}>
@@ -218,6 +222,7 @@ export default function Statistics({ onLogout }) {
           </TabsContent>
 
           <TabsContent value="engagement" className="space-y-6 mt-6">
+            {/* giữ nguyên UI mock */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
                 <CardHeader className="pb-2">
@@ -226,6 +231,7 @@ export default function Statistics({ onLogout }) {
                 <CardContent>
                   <div className="text-4xl font-bold text-blue-600">45 phút</div>
                   <p className="text-sm text-green-600 mt-1">+5% so với tuần trước</p>
+                  <p className="text-xs text-gray-500 mt-2">TODO(API MISSING)</p>
                 </CardContent>
               </Card>
               <Card>
@@ -235,6 +241,7 @@ export default function Statistics({ onLogout }) {
                 <CardContent>
                   <div className="text-4xl font-bold text-purple-600">68%</div>
                   <p className="text-sm text-green-600 mt-1">+3% so với tuần trước</p>
+                  <p className="text-xs text-gray-500 mt-2">TODO(API MISSING)</p>
                 </CardContent>
               </Card>
               <Card>
@@ -244,6 +251,7 @@ export default function Statistics({ onLogout }) {
                 <CardContent>
                   <div className="text-4xl font-bold text-orange-600">8.5</div>
                   <p className="text-sm text-green-600 mt-1">+12% so với tuần trước</p>
+                  <p className="text-xs text-gray-500 mt-2">TODO(API MISSING)</p>
                 </CardContent>
               </Card>
             </div>

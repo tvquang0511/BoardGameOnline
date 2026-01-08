@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,26 +7,74 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserPlus, MessageSquare, Swords, Check, X, Search } from 'lucide-react';
+import { friendsApi } from '../../api/friends.api';
+import { usersApi } from '../../api/users.api';
 
 export default function Friends({ onLogout }) {
-  const friends = [
-    { name: 'CoolGamer99', status: 'online', level: 28, avatar: 'seed1' },
-    { name: 'ProPlayer123', status: 'online', level: 32, avatar: 'seed2' },
-    { name: 'NinjaWarrior', status: 'offline', level: 24, avatar: 'seed3' },
-    { name: 'QueenBee', status: 'playing', level: 30, avatar: 'seed4' },
-    { name: 'SpeedRunner', status: 'online', level: 26, avatar: 'seed5' },
-  ];
+  const [friends, setFriends] = useState([]);
+  const [incoming, setIncoming] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
 
-  const pendingRequests = [
-    { name: 'NewPlayer88', level: 12, avatar: 'seed6' },
-    { name: 'GameMaster', level: 35, avatar: 'seed7' },
-  ];
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const suggestions = [
-    { name: 'StarPlayer', level: 29, mutualFriends: 3, avatar: 'seed8' },
-    { name: 'ChampionX', level: 31, mutualFriends: 5, avatar: 'seed9' },
-    { name: 'LegendKiller', level: 27, mutualFriends: 2, avatar: 'seed10' },
-  ];
+  const reload = async () => {
+    const [f, r, s] = await Promise.all([
+      friendsApi.list(),
+      friendsApi.requests(),
+      friendsApi.suggestions({ limit: 10 }),
+    ]);
+    setFriends(f.friends || []);
+    setIncoming(r.requests || []);
+    setSuggestions(s.suggestions || []);
+  };
+
+  useEffect(() => {
+    reload().catch(() => {
+      // TODO(API): error state
+    });
+  }, []);
+
+  const handleAccept = async (id) => {
+    await friendsApi.accept(id);
+    await reload();
+  };
+
+  const handleReject = async (id) => {
+    await friendsApi.reject(id);
+    await reload();
+  };
+
+  const handleRequest = async (userId) => {
+    await friendsApi.request(userId);
+    await reload();
+  };
+
+  const searchedUsers = useMemo(() => {
+    return suggestions; // default suggestions list
+  }, [suggestions]);
+
+  const handleSearch = async (q) => {
+    setSearchQuery(q);
+    if (!q.trim()) {
+      // back to suggestions
+      const s = await friendsApi.suggestions({ limit: 10 });
+      setSuggestions(s.suggestions || []);
+      return;
+    }
+    // Search users globally
+    const data = await usersApi.search({ q, limit: 10 });
+    // TODO(API MISSING): backend không trả mutualFriends -> UI sẽ không có số bạn chung thật
+    setSuggestions(
+      (data.users || []).map((u) => ({
+        user_id: u.id,
+        username: u.username,
+        display_name: u.display_name,
+        level: u.level,
+        avatar_url: u.avatar_url,
+        mutualFriends: 0, // TODO(API MISSING)
+      }))
+    );
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -38,6 +87,32 @@ export default function Friends({ onLogout }) {
     }
   };
 
+  // Map friend relationship row -> display info
+  // TODO(API MISSING): backend friends list currently returns relation rows only (ids/status),
+  // not joined profile info. For now we show placeholders.
+  const friendItems = friends.map((rel, idx) => ({
+    id: rel.id,
+    name: `Friend #${rel.id}`, // TODO(API MISSING): need join profiles in backend
+    status: 'offline', // TODO(API MISSING): online presence
+    level: 1, // TODO(API MISSING)
+    avatar: `seed_friend_${idx}`,
+  }));
+
+  const requestItems = incoming.map((rel, idx) => ({
+    id: rel.id,
+    name: `User #${rel.requester_id}`, // TODO(API MISSING): need join profiles
+    level: 1, // TODO(API MISSING)
+    avatar: `seed_req_${idx}`,
+  }));
+
+  const suggestionItems = searchedUsers.map((u, idx) => ({
+    user_id: u.user_id ?? u.id,
+    name: u.display_name || u.username || `User #${u.user_id ?? u.id}`,
+    level: u.level ?? 1,
+    mutualFriends: u.mutualFriends ?? 0,
+    avatar: u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=sug_${idx}`,
+  }));
+
   return (
     <Layout onLogout={onLogout}>
       <div className="space-y-6">
@@ -46,22 +121,21 @@ export default function Friends({ onLogout }) {
           <div className="flex gap-2">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input placeholder="Tìm kiếm bạn bè..." className="pl-10" />
+              <Input
+                placeholder="Tìm kiếm bạn bè..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
             </div>
           </div>
         </div>
 
         <Tabs defaultValue="friends" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="friends">
-              Bạn bè ({friends.length})
-            </TabsTrigger>
-            <TabsTrigger value="requests">
-              Lời mời ({pendingRequests.length})
-            </TabsTrigger>
-            <TabsTrigger value="suggestions">
-              Gợi ý
-            </TabsTrigger>
+            <TabsTrigger value="friends">Bạn bè ({friendItems.length})</TabsTrigger>
+            <TabsTrigger value="requests">Lời mời ({requestItems.length})</TabsTrigger>
+            <TabsTrigger value="suggestions">Gợi ý</TabsTrigger>
           </TabsList>
 
           <TabsContent value="friends" className="mt-6">
@@ -72,9 +146,9 @@ export default function Friends({ onLogout }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {friends.map((friend) => (
+                  {friendItems.map((friend) => (
                     <div
-                      key={friend.name}
+                      key={friend.id}
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center gap-4">
@@ -84,9 +158,7 @@ export default function Friends({ onLogout }) {
                             <AvatarFallback>{friend.name[0]}</AvatarFallback>
                           </Avatar>
                           <div
-                            className={`absolute bottom-0 right-0 w-3 h-3 ${getStatusColor(
-                              friend.status
-                            )} rounded-full border-2 border-white`}
+                            className={`absolute bottom-0 right-0 w-3 h-3 ${getStatusColor(friend.status)} rounded-full border-2 border-white`}
                           />
                         </div>
                         <div>
@@ -122,11 +194,8 @@ export default function Friends({ onLogout }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {pendingRequests.map((request) => (
-                    <div
-                      key={request.name}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
+                  {requestItems.map((request) => (
+                    <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-4">
                         <Avatar className="w-12 h-12">
                           <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${request.avatar}`} />
@@ -138,11 +207,11 @@ export default function Friends({ onLogout }) {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAccept(request.id)}>
                           <Check className="w-4 h-4 mr-2" />
                           Chấp nhận
                         </Button>
-                        <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50">
+                        <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => handleReject(request.id)}>
                           <X className="w-4 h-4 mr-2" />
                           Từ chối
                         </Button>
@@ -162,14 +231,11 @@ export default function Friends({ onLogout }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {suggestions.map((suggestion) => (
-                    <div
-                      key={suggestion.name}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
+                  {suggestionItems.map((suggestion) => (
+                    <div key={suggestion.user_id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-4">
                         <Avatar className="w-12 h-12">
-                          <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${suggestion.avatar}`} />
+                          <AvatarImage src={suggestion.avatar} />
                           <AvatarFallback>{suggestion.name[0]}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -177,12 +243,12 @@ export default function Friends({ onLogout }) {
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary">Level {suggestion.level}</Badge>
                             <span className="text-sm text-gray-600">
-                              {suggestion.mutualFriends} bạn chung
+                              {suggestion.mutualFriends} bạn chung {/* TODO(API MISSING) */}
                             </span>
                           </div>
                         </div>
                       </div>
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => handleRequest(suggestion.user_id)}>
                         <UserPlus className="w-4 h-4 mr-2" />
                         Kết bạn
                       </Button>

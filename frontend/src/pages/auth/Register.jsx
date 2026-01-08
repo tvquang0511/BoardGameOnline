@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gamepad2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { authApi } from '../../api/auth.api';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function Register() {
   });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
       alert('Mật khẩu không khớp!');
@@ -27,8 +28,18 @@ export default function Register() {
       alert('Vui lòng đồng ý với điều khoản sử dụng!');
       return;
     }
-    // Mock register
-    navigate('/login');
+
+    try {
+      await authApi.register({
+        email: formData.email,
+        password: formData.password,
+        username: formData.username,
+        display_name: formData.username,
+      });
+      navigate('/login');
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Đăng ký thất bại');
+    }
   };
 
   const handleChange = (e) => {
@@ -97,8 +108,8 @@ export default function Register() {
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="terms" 
+              <Checkbox
+                id="terms"
                 checked={agreedToTerms}
                 onCheckedChange={(checked) => setAgreedToTerms(checked)}
               />

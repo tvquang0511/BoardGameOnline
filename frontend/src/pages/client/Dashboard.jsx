@@ -1,18 +1,44 @@
+import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Star, Target, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { profilesApi } from '../../api/profiles.api';
+import { achievementsApi } from '../../api/achievements.api';
 
 export default function Dashboard({ onLogout }) {
-  const stats = [
-    { name: 'Tổng điểm', value: '12,450', icon: Star, color: 'from-yellow-400 to-orange-500' },
-    { name: 'Thắng liên tiếp', value: '8', icon: Trophy, color: 'from-blue-400 to-blue-600' },
-    { name: 'Thành tựu', value: '23/50', icon: Target, color: 'from-green-400 to-green-600' },
-    { name: 'Hạng', value: '#42', icon: Zap, color: 'from-purple-400 to-purple-600' },
-  ];
+  const [profile, setProfile] = useState(null);
+  const [myAchievements, setMyAchievements] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [p, a] = await Promise.all([profilesApi.me(), achievementsApi.my()]);
+        if (!mounted) return;
+        setProfile(p.profile);
+        setMyAchievements(a.achievements || []);
+      } catch {
+        // TODO(API): error state
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const unlockedCount = myAchievements.filter((x) => x.unlocked_at).length;
+
+  const stats = useMemo(() => {
+    return [
+      { name: 'Tổng điểm', value: (profile?.points ?? 0).toLocaleString('vi-VN'), icon: Star, color: 'from-yellow-400 to-orange-500' },
+      { name: 'Thắng liên tiếp', value: '8', icon: Trophy, color: 'from-blue-400 to-blue-600' }, // TODO(API MISSING): streak
+      { name: 'Thành tựu', value: `${unlockedCount}/50`, icon: Target, color: 'from-green-400 to-green-600' }, // TODO(API): total achievements from catalog
+      { name: 'Hạng', value: '#42', icon: Zap, color: 'from-purple-400 to-purple-600' }, // TODO(API MISSING): rank
+    ];
+  }, [profile, unlockedCount]);
 
   const recentGames = [
+    // TODO(API MISSING): cần API recent game_results
     { name: 'Cờ Caro 5', result: 'Thắng', score: 250, date: '2 giờ trước' },
     { name: 'Tic-Tac-Toe', result: 'Thắng', score: 100, date: '5 giờ trước' },
     { name: 'Rắn săn mồi', result: 'Thua', score: -50, date: 'Hôm qua' },
@@ -23,11 +49,10 @@ export default function Dashboard({ onLogout }) {
     <Layout onLogout={onLogout}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Xin chào, GamePro!</h1>
+          <h1 className="text-4xl font-bold mb-2">Xin chào, {profile?.display_name || profile?.username || 'Player'}!</h1>
           <p className="text-gray-600">Chào mừng bạn trở lại với Board Game Hub</p>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat) => {
             const Icon = stat.icon;
@@ -49,31 +74,23 @@ export default function Dashboard({ onLogout }) {
           })}
         </div>
 
-        {/* Quick Actions */}
         <Card>
           <CardHeader>
             <CardTitle>Hành động nhanh</CardTitle>
           </CardHeader>
           <CardContent className="flex gap-4">
             <Link to="/games">
-              <Button className="bg-gradient-to-r from-blue-500 to-purple-600">
-                Chơi ngay
-              </Button>
+              <Button className="bg-gradient-to-r from-blue-500 to-purple-600">Chơi ngay</Button>
             </Link>
             <Link to="/friends">
-              <Button variant="outline">
-                Thách đấu bạn bè
-              </Button>
+              <Button variant="outline">Thách đấu bạn bè</Button>
             </Link>
             <Link to="/achievements">
-              <Button variant="outline">
-                Xem thành tựu
-              </Button>
+              <Button variant="outline">Xem thành tựu</Button>
             </Link>
           </CardContent>
         </Card>
 
-        {/* Recent Games */}
         <Card>
           <CardHeader>
             <CardTitle>Lịch sử chơi gần đây</CardTitle>
@@ -97,11 +114,7 @@ export default function Dashboard({ onLogout }) {
                     >
                       {game.result}
                     </span>
-                    <span
-                      className={`font-bold ${
-                        game.score > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
+                    <span className={`font-bold ${game.score > 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {game.score > 0 ? '+' : ''}{game.score}
                     </span>
                   </div>

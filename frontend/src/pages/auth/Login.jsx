@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Gamepad2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '../../context/AuthContext';
+import { authApi } from '../../api/auth.api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,15 +16,15 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Mock: bạn muốn admin chỉ cần email => giữ nguyên yêu cầu đó
-    const isAdmin = email === 'admin@game.com';
-
-    // Gọi auth.login và chờ promise resolve trước khi navigate (fix race condition)
-    auth.login(isAdmin).then(() => {
-      navigate(isAdmin ? '/admin' : '/');
-    });
+    try {
+      const data = await authApi.login({ email, password }); // { user, token }
+      await auth.login({ user: data.user, token: data.token });
+      navigate(data.user?.role === 'admin' ? '/admin' : '/');
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Đăng nhập thất bại');
+    }
   };
 
   return (
@@ -86,7 +87,7 @@ export default function Login() {
                 </Link>
               </p>
               <p className="text-xs text-gray-500 italic">
-                Gợi ý: Dùng admin@game.com để đăng nhập admin
+                Gợi ý: admin@game.com / 123456 (seed)
               </p>
             </div>
           </form>

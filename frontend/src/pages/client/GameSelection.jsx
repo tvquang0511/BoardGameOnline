@@ -1,24 +1,51 @@
+import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
+import { gamesApi } from '../../api/games.api';
+
+const FALLBACK_STYLE_BY_SLUG = {
+  caro5: { color: 'from-red-400 to-pink-500', emoji: '⭕' },
+  caro4: { color: 'from-blue-400 to-cyan-500', emoji: '🔵' },
+  tictactoe: { color: 'from-green-400 to-emerald-500', emoji: '❌' },
+  snake: { color: 'from-yellow-400 to-orange-500', emoji: '🐍' },
+  match3: { color: 'from-purple-400 to-pink-500', emoji: '💎' },
+  candy: { color: 'from-pink-400 to-rose-500', emoji: '🍬' },
+  sudoku: { color: 'from-orange-400 to-red-500', emoji: '🔢' },
+};
 
 export default function GameSelection({ onLogout }) {
   const navigate = useNavigate();
+  const [games, setGames] = useState([]);
 
-  const games = [
-    { id: 'caro5', name: 'Cờ Caro 5', color: 'from-red-400 to-pink-500', emoji: '⭕' },
-    { id: 'caro4', name: 'Cờ Caro 4', color: 'from-blue-400 to-cyan-500', emoji: '🔵' },
-    { id: 'tictactoe', name: 'Tic-Tac-Toe', color: 'from-green-400 to-emerald-500', emoji: '❌' },
-    { id: 'snake', name: 'Rắn săn mồi', color: 'from-yellow-400 to-orange-500', emoji: '🐍' },
-    { id: 'match3', name: 'Ghép hàng 3', color: 'from-purple-400 to-pink-500', emoji: '💎' },
-    { id: 'candy', name: 'Candy Rush', color: 'from-pink-400 to-rose-500', emoji: '🍬' },
-    { id: 'chess', name: 'Cờ Tí Nhớ', color: 'from-indigo-400 to-purple-500', emoji: '🎴' },
-    { id: 'bangve', name: 'Băng Về', color: 'from-teal-400 to-cyan-500', emoji: '🏠' },
-    { id: 'sudoku', name: 'Sudoku', color: 'from-orange-400 to-red-500', emoji: '🔢' },
-    { id: 'puzzle', name: 'Xếp Hình', color: 'from-cyan-400 to-blue-500', emoji: '🧩' },
-    { id: 'tetris', name: 'Tetris', color: 'from-lime-400 to-green-500', emoji: '🟦' },
-    { id: 'solitaire', name: 'Solitaire', color: 'from-rose-400 to-red-500', emoji: '🃏' },
-  ];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await gamesApi.list({ all: false });
+        if (!mounted) return;
+        setGames(data.games || []);
+      } catch (e) {
+        // TODO(API): nếu cần fallback mock list game khi backend lỗi
+        setGames([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const view = useMemo(() => {
+    return (games || []).map((g) => {
+      const fb = FALLBACK_STYLE_BY_SLUG[g.slug] || { color: 'from-gray-400 to-gray-500', emoji: '🎮' };
+      return {
+        id: g.slug,
+        name: g.name,
+        color: fb.color, // TODO(API MISSING): backend chưa có color
+        emoji: fb.emoji, // TODO(API MISSING): backend chưa có emoji
+      };
+    });
+  }, [games]);
 
   const handleGameClick = (gameId) => {
     navigate(`/game/${gameId}`);
@@ -33,7 +60,7 @@ export default function GameSelection({ onLogout }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {games.map((game) => (
+          {view.map((game) => (
             <Card
               key={game.id}
               className="cursor-pointer transition-all hover:scale-105 hover:shadow-xl"

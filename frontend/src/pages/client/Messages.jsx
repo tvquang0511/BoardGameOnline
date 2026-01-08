@@ -1,66 +1,69 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Send } from 'lucide-react';
+import { messagesApi } from '../../api/messages.api';
 
 export default function Messages({ onLogout }) {
-  const [selectedChat, setSelectedChat] = useState(0);
+  const [selectedPartnerId, setSelectedPartnerId] = useState(null);
   const [message, setMessage] = useState('');
 
-  const chats = [
-    {
-      id: 0,
-      name: 'CoolGamer99',
-      avatar: 'seed1',
-      lastMessage: 'Chơi một ván nữa không?',
-      time: '5 phút trước',
-      unread: 2,
-      online: true,
-    },
-    {
-      id: 1,
-      name: 'ProPlayer123',
-      avatar: 'seed2',
-      lastMessage: 'GG bro!',
-      time: '1 giờ trước',
-      unread: 0,
-      online: true,
-    },
-    {
-      id: 2,
-      name: 'QueenBee',
-      avatar: 'seed4',
-      lastMessage: 'Cảm ơn nhé!',
-      time: '2 giờ trước',
-      unread: 1,
-      online: false,
-    },
-    {
-      id: 3,
-      name: 'SpeedRunner',
-      avatar: 'seed5',
-      lastMessage: 'Mai chơi tiếp nhé',
-      time: 'Hôm qua',
-      unread: 0,
-      online: false,
-    },
-  ];
+  const [conversations, setConversations] = useState([]);
+  const [messages, setMessages] = useState([]);
 
-  const messages = [
-    { sender: 'other', text: 'Hey! Lâu quá không gặp', time: '10:30' },
-    { sender: 'me', text: 'Yeah! Dạo này bận quá', time: '10:32' },
-    { sender: 'other', text: 'Chơi một ván cờ caro không?', time: '10:33' },
-    { sender: 'me', text: 'Ok! Tạo phòng đi', time: '10:35' },
-    { sender: 'other', text: 'Chơi một ván nữa không?', time: '10:45' },
-  ];
-
-  const handleSend = () => {
-    if (message.trim()) {
-      setMessage('');
+  const reloadConversations = async () => {
+    const data = await messagesApi.conversations();
+    setConversations(data.conversations || []);
+    if (!selectedPartnerId && (data.conversations || []).length) {
+      setSelectedPartnerId(data.conversations[0].partner_id);
     }
+  };
+
+  const reloadMessages = async (partnerId) => {
+    if (!partnerId) return;
+    const data = await messagesApi.list({ withUser: partnerId, page: 1, limit: 50 });
+    setMessages(data.messages || []);
+  };
+
+  useEffect(() => {
+    reloadConversations().catch(() => {
+      // TODO(API): error state
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    reloadMessages(selectedPartnerId).catch(() => {});
+  }, [selectedPartnerId]);
+
+  const chatItems = useMemo(() => {
+    return conversations.map((c, idx) => {
+      const lastTime = c.last?.created_at ? new Date(c.last.created_at) : null;
+      return {
+        partner_id: c.partner_id,
+        name: `User #${c.partner_id}`, // TODO(API MISSING): backend chưa join profile
+        avatar: `seed_chat_${idx}`,
+        lastMessage: c.last?.content || '',
+        time: lastTime ? lastTime.toLocaleString('vi-VN') : '',
+        unread: c.unread || 0,
+        online: false, // TODO(API MISSING)
+      };
+    });
+  }, [conversations]);
+
+  const selectedChat = useMemo(() => {
+    return chatItems.find((c) => c.partner_id === selectedPartnerId) || chatItems[0];
+  }, [chatItems, selectedPartnerId]);
+
+  const handleSend = async () => {
+    if (!message.trim() || !selectedPartnerId) return;
+    await messagesApi.send({ receiverId: selectedPartnerId, content: message.trim() });
+    setMessage('');
+    await reloadMessages(selectedPartnerId);
+    await reloadConversations();
   };
 
   return (
@@ -70,19 +73,18 @@ export default function Messages({ onLogout }) {
 
         <Card className="h-[calc(100vh-200px)]">
           <CardContent className="p-0 h-full flex">
-            {/* Chat List */}
             <div className="w-80 border-r flex flex-col">
               <div className="p-4 border-b">
-                <Input placeholder="Tìm kiếm..." />
+                <Input placeholder="Tìm kiếm... (TODO API)" />
               </div>
               <div className="flex-1 overflow-y-auto">
-                {chats.map((chat) => (
+                {chatItems.map((chat) => (
                   <div
-                    key={chat.id}
+                    key={chat.partner_id}
                     className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                      selectedChat === chat.id ? 'bg-blue-50' : ''
+                      selectedPartnerId === chat.partner_id ? 'bg-blue-50' : ''
                     }`}
-                    onClick={() => setSelectedChat(chat.id)}
+                    onClick={() => setSelectedPartnerId(chat.partner_id)}
                   >
                     <div className="relative">
                       <Avatar>
@@ -112,56 +114,54 @@ export default function Messages({ onLogout }) {
               </div>
             </div>
 
-            {/* Chat Window */}
             <div className="flex-1 flex flex-col">
-              {/* Chat Header */}
               <div className="p-4 border-b flex items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${chats[selectedChat].avatar}`} />
-                  <AvatarFallback>{chats[selectedChat].name[0]}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-semibold">{chats[selectedChat].name}</p>
-                  <p className="text-sm text-gray-600">
-                    {chats[selectedChat].online ? 'Đang hoạt động' : 'Không hoạt động'}
-                  </p>
-                </div>
+                {selectedChat ? (
+                  <>
+                    <Avatar>
+                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedChat.avatar}`} />
+                      <AvatarFallback>{selectedChat.name[0]}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold">{selectedChat.name}</p>
+                      <p className="text-sm text-gray-600">
+                        {selectedChat.online ? 'Đang hoạt động' : 'Không hoạt động'} {/* TODO(API MISSING) */}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
               </div>
 
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg, index) => (
+                {messages.map((msg) => (
                   <div
-                    key={index}
-                    className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}
+                    key={msg.id}
+                    className={`flex ${msg.sender_id === selectedPartnerId ? 'justify-start' : 'justify-end'}`}
                   >
                     <div
                       className={`max-w-xs ${
-                        msg.sender === 'me'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                        msg.sender_id === selectedPartnerId ? 'bg-gray-100 text-gray-900' : 'bg-blue-600 text-white'
                       } rounded-2xl px-4 py-2`}
                     >
-                      <p>{msg.text}</p>
+                      <p>{msg.content}</p>
                       <p
                         className={`text-xs mt-1 ${
-                          msg.sender === 'me' ? 'text-blue-200' : 'text-gray-500'
+                          msg.sender_id === selectedPartnerId ? 'text-gray-500' : 'text-blue-200'
                         }`}
                       >
-                        {msg.time}
+                        {msg.created_at ? new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Message Input */}
               <div className="p-4 border-t flex gap-2">
                 <Input
                   placeholder="Nhập tin nhắn..."
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 />
                 <Button onClick={handleSend}>
                   <Send className="w-4 h-4" />
