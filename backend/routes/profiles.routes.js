@@ -6,5 +6,6 @@ router.use(requireAuth);
 
 router.get('/me', profiles.me);
 router.patch('/me', profiles.updateMe);
+router.get('/me/stats', profiles.myStats);
 
 module.exports = router;

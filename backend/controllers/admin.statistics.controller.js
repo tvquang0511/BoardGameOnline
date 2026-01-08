@@ -2,27 +2,24 @@ const db = require('../db/knex');
 
 /**
  * GET /api/admin/statistics/dau?days=7
- * Return daily active users (unique users with sessions) for the last `days` days (default 7).
- * Response: { days: [ { date: 'YYYY-MM-DD', users: 123 }, ... ] }
+ * DAU = unique users with auth_sessions started in day.
  */
 exports.dau = async (req, res, next) => {
   try {
     const days = Math.max(1, parseInt(req.query.days, 10) || 7);
 
-    const end = new Date(); // now
+    const end = new Date();
     const start = new Date(end);
     start.setUTCHours(0, 0, 0, 0);
     start.setUTCDate(start.getUTCDate() - (days - 1));
 
-    // Query sessions started in the range and count distinct users per day
-    const rows = await db('sessions')
+    const rows = await db('auth_sessions')
       .where('started_at', '>=', start.toISOString())
       .select(db.raw("date_trunc('day', started_at) as day"))
       .countDistinct('user_id as users')
       .groupBy('day')
       .orderBy('day');
 
-    // Map results by date string
     const map = new Map();
     rows.forEach((r) => {
       const d = new Date(r.day);
@@ -30,7 +27,6 @@ exports.dau = async (req, res, next) => {
       map.set(key, parseInt(r.users, 10));
     });
 
-    // Build array covering each day even if zero
     const result = [];
     for (let i = 0; i < days; i++) {
       const d = new Date(start);
@@ -47,16 +43,14 @@ exports.dau = async (req, res, next) => {
 
 /**
  * GET /api/admin/statistics/sessions-by-hour
- * Sessions count grouped by hour for the last 24 hours.
- * Response: { hours: [ { hour: 0, count: 10 }, ... ] } // hours 0-23 (UTC)
+ * Count auth sessions grouped by UTC hour for last 24h.
  */
 exports.sessionsByHour = async (req, res, next) => {
   try {
-    // Last 24 hours
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rows = await db('sessions')
+    const rows = await db('auth_sessions')
       .where('started_at', '>=', from.toISOString())
       .select(db.raw("extract(hour from started_at) as hour"))
       .count('* as count')
@@ -69,7 +63,6 @@ exports.sessionsByHour = async (req, res, next) => {
       map.set(h, parseInt(r.count, 10));
     });
 
-    // produce array 0..23 (UTC hours relative to started_at)
     const result = [];
     for (let h = 0; h < 24; h++) {
       result.push({ hour: h, count: map.get(h) || 0 });
@@ -81,11 +74,6 @@ exports.sessionsByHour = async (req, res, next) => {
   }
 };
 
-/**
- * GET /api/admin/statistics/game-distribution
- * Distribution of plays per game (based on game_results plays count).
- * Response: { distribution: [ { game_id, name, plays, percent }, ... ] }
- */
 exports.gameDistribution = async (req, res, next) => {
   try {
     const rows = await db('game_results')
@@ -113,16 +101,10 @@ exports.gameDistribution = async (req, res, next) => {
   }
 };
 
-/**
- * GET /api/admin/statistics/user-growth?months=6
- * Monthly user growth (new users per month and cumulative).
- * Response: { months: [ { month: 'YYYY-MM', new_users: n, cumulative: m }, ... ] }
- */
 exports.userGrowth = async (req, res, next) => {
   try {
     const months = Math.max(1, parseInt(req.query.months, 10) || 6);
     const now = new Date();
-    // calculate start month (months-1 months ago)
     const startMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1, 0, 0, 0, 0));
     const startISO = startMonth.toISOString();
 
@@ -133,7 +115,6 @@ exports.userGrowth = async (req, res, next) => {
       .groupBy('month')
       .orderBy('month');
 
-    // map month -> new_users
     const map = new Map();
     rows.forEach((r) => {
       const d = new Date(r.month);
@@ -141,7 +122,6 @@ exports.userGrowth = async (req, res, next) => {
       map.set(key, parseInt(r.new_users, 10));
     });
 
-    // Build array of months
     const result = [];
     let cumulative = 0;
 

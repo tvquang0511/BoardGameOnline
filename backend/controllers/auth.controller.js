@@ -4,9 +4,22 @@ const validator = require('validator');
 
 const User = require('../models/user.model');
 const Profile = require('../models/profile.model');
+const AuthSession = require('../models/authSession.model');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const ADMIN_EMAIL = 'admin@game.com';
+
+/**
+ * Dev bypass only if DEV_ADMIN_BYPASS === 'true' AND NODE_ENV === 'development' and email matches.
+ * By default bypass is disabled so admin still must provide correct password.
+ */
+function isDevAdminBypass(email) {
+  return (
+    process.env.NODE_ENV === 'development' &&
+    process.env.DEV_ADMIN_BYPASS === 'true' &&
+    email === ADMIN_EMAIL
+  );
+}
 
 function signToken(user) {
   return jwt.sign(
@@ -14,10 +27,6 @@ function signToken(user) {
     JWT_SECRET,
     { expiresIn: '7d' }
   );
-}
-
-function isDevAdminBypass(email) {
-  return process.env.NODE_ENV === 'development' && email === ADMIN_EMAIL;
 }
 
 exports.register = async (req, res, next) => {
@@ -63,31 +72,42 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid email' });
     }
 
-    let user = await User.findByEmail(email);
-    if (!user) {
-      // Production: không tự tạo user khi login
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    const user = await User.findByEmail(email);
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
     if (!user.is_enabled) {
       return res.status(403).json({ message: 'Account disabled' });
     }
 
-    // DEV BYPASS for admin@game.com only
+    // Only allow bypass when DEV_ADMIN_BYPASS=true in development; otherwise always check password.
     if (!isDevAdminBypass(email)) {
       if (!password || typeof password !== 'string') {
         return res.status(400).json({ message: 'Password required' });
       }
-
       if (!user.password_hash) {
         return res.status(401).json({ message: 'Account has no password set' });
       }
-
       const ok = await bcrypt.compare(password, user.password_hash);
       if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+    } else {
+      // optional: log that a dev bypass was used (only in development)
+      /* eslint-disable no-console */
+      console.warn(`DEV_ADMIN_BYPASS used for ${email}`);
     }
 
     await User.update(user.id, { last_login_at: new Date() });
+
+    // start auth session (model should exist)
+    try {
+      await AuthSession.start({
+        user_id: user.id,
+        ip: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+      });
+    } catch (e) {
+      // non-fatal: don't block login if auth session recording fails
+      console.warn('AuthSession.start failed', e?.message || e);
+    }
 
     const token = signToken(user);
     res.json({ user: { id: user.id, email: user.email, role: user.role }, token });
@@ -98,7 +118,12 @@ exports.login = async (req, res, next) => {
 
 exports.logout = async (req, res, next) => {
   try {
-    // Stateless logout
+    // try to end latest auth session if model present
+    try {
+      await AuthSession.endLatest({ user_id: req.user.sub });
+    } catch (e) {
+      console.warn('AuthSession.endLatest failed', e?.message || e);
+    }
     return res.json({ ok: true });
   } catch (err) {
     next(err);

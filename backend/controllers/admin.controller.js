@@ -28,7 +28,9 @@ exports.updateUser = async (req, res, next) => {
 exports.stats = async (req, res, next) => {
   try {
     const [{ count: userCount }] = await db('users').count('*');
-    const [{ count: sessionCount }] = await db('sessions').count('*');
+    const [{ count: gameSessionCount }] = await db('sessions').count('*');
+    const [{ count: authSessionCount }] = await db('auth_sessions').count('*');
+
     const topGames = await db('game_results')
       .join('games', 'game_results.game_id', 'games.id')
       .select('games.slug', 'games.name')
@@ -39,7 +41,8 @@ exports.stats = async (req, res, next) => {
 
     res.json({
       users: Number(userCount),
-      sessions: Number(sessionCount),
+      game_sessions: Number(gameSessionCount),
+      auth_sessions: Number(authSessionCount),
       topGames,
     });
   } catch (e) { next(e); }

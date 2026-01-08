@@ -4,6 +4,7 @@ module.exports = {
   listCatalog() {
     return db('achievements').select('*').orderBy('created_at', 'asc');
   },
+
   async listForUser(user_id) {
     return db('user_achievements')
       .join('achievements', 'user_achievements.achievement_id', 'achievements.id')
@@ -13,12 +14,14 @@ module.exports = {
         'achievements.description',
         'achievements.rarity',
         'achievements.points',
+        'achievements.criteria',
         'user_achievements.progress',
         'user_achievements.unlocked_at'
       )
       .where('user_achievements.user_id', user_id)
       .orderBy('achievements.created_at', 'asc');
   },
+
   async unlockByCode(user_id, code) {
     const ach = await db('achievements').where({ code }).first();
     if (!ach) return null;

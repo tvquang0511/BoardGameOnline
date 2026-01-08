@@ -1,6 +1,7 @@
 exports.up = async function (knex) {
   await knex.raw(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
 
+  // users
   await knex.schema.createTable('users', (t) => {
     t.increments('id').primary();
     t.string('email').notNullable().unique();
@@ -12,6 +13,7 @@ exports.up = async function (knex) {
     t.timestamp('last_login_at').nullable();
   });
 
+  // profiles
   await knex.schema.createTable('profiles', (t) => {
     t.integer('user_id').primary().references('id').inTable('users').onDelete('CASCADE');
     t.string('username').notNullable().unique();
@@ -23,19 +25,35 @@ exports.up = async function (knex) {
     t.jsonb('settings').notNullable().defaultTo('{}');
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     t.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
+    t.index(['username']);
   });
 
+  // auth sessions (login sessions) for admin statistics
+  await knex.schema.createTable('auth_sessions', (t) => {
+    t.increments('id').primary();
+    t.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+    t.timestamp('started_at').notNullable().defaultTo(knex.fn.now());
+    t.timestamp('ended_at').nullable();
+    t.string('ip').nullable();
+    t.text('user_agent').nullable();
+    t.index(['user_id', 'started_at']);
+    t.index(['started_at']);
+  });
+
+  // games
   await knex.schema.createTable('games', (t) => {
     t.increments('id').primary();
     t.string('slug').notNullable().unique();
     t.string('name').notNullable();
     t.text('description').nullable();
     t.enu('status', ['active', 'inactive', 'maintenance']).notNullable().defaultTo('active');
-    t.jsonb('default_config').notNullable().defaultTo('{}');
+    t.jsonb('default_config').notNullable().defaultTo('{}'); // board/time/save/hint...
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     t.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
+    t.index(['status']);
   });
 
+  // sessions (game sessions)
   await knex.schema.createTable('sessions', (t) => {
     t.increments('id').primary();
     t.integer('game_id').notNullable().references('id').inTable('games').onDelete('CASCADE');
@@ -55,8 +73,10 @@ exports.up = async function (knex) {
 
     t.index(['user_id', 'game_id']);
     t.index(['game_id', 'status']);
+    t.index(['started_at']);
   });
 
+  // saved games
   await knex.schema.createTable('saved_games', (t) => {
     t.increments('id').primary();
     t.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
@@ -67,20 +87,31 @@ exports.up = async function (knex) {
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     t.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
     t.index(['user_id', 'game_id']);
+    t.index(['created_at']);
   });
 
+  // friends - canonical pair to prevent reverse duplicates
   await knex.schema.createTable('friends', (t) => {
     t.increments('id').primary();
     t.integer('requester_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
     t.integer('addressee_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+
+    t.integer('user_low_id').notNullable();
+    t.integer('user_high_id').notNullable();
+
     t.enu('status', ['pending', 'accepted', 'rejected', 'blocked']).notNullable().defaultTo('pending');
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     t.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
-    t.unique(['requester_id', 'addressee_id']);
+
+    t.unique(['user_low_id', 'user_high_id']);
     t.index(['requester_id']);
     t.index(['addressee_id']);
+    t.index(['user_low_id']);
+    t.index(['user_high_id']);
+    t.index(['status']);
   });
 
+  // messages
   await knex.schema.createTable('messages', (t) => {
     t.increments('id').primary();
     t.integer('sender_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
@@ -91,8 +122,10 @@ exports.up = async function (knex) {
     t.boolean('is_deleted').notNullable().defaultTo(false);
     t.index(['sender_id', 'receiver_id']);
     t.index(['receiver_id', 'created_at']);
+    t.index(['read_at']);
   });
 
+  // achievements
   await knex.schema.createTable('achievements', (t) => {
     t.increments('id').primary();
     t.string('code').notNullable().unique();
@@ -100,10 +133,12 @@ exports.up = async function (knex) {
     t.text('description').nullable();
     t.string('rarity').nullable();
     t.integer('points').notNullable().defaultTo(0);
+    // criteria suggestion: { type: "...", target: number, game_slug?: "...", ... }
     t.jsonb('criteria').notNullable().defaultTo('{}');
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
   });
 
+  // user_achievements
   await knex.schema.createTable('user_achievements', (t) => {
     t.increments('id').primary();
     t.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
@@ -112,8 +147,10 @@ exports.up = async function (knex) {
     t.timestamp('unlocked_at').nullable();
     t.unique(['user_id', 'achievement_id']);
     t.index(['user_id']);
+    t.index(['unlocked_at']);
   });
 
+  // game results for leaderboard/history
   await knex.schema.createTable('game_results', (t) => {
     t.increments('id').primary();
     t.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
@@ -129,6 +166,7 @@ exports.up = async function (knex) {
     t.index(['created_at']);
   });
 
+  // audit logs
   await knex.schema.createTable('audit_logs', (t) => {
     t.increments('id').primary();
     t.integer('actor_id').nullable().references('id').inTable('users').onDelete('SET NULL');
@@ -137,6 +175,8 @@ exports.up = async function (knex) {
     t.integer('target_id').nullable();
     t.jsonb('data').notNullable().defaultTo('{}');
     t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+    t.index(['created_at']);
+    t.index(['actor_id']);
   });
 };
 
@@ -150,6 +190,7 @@ exports.down = async function (knex) {
   await knex.schema.dropTableIfExists('saved_games');
   await knex.schema.dropTableIfExists('sessions');
   await knex.schema.dropTableIfExists('games');
+  await knex.schema.dropTableIfExists('auth_sessions');
   await knex.schema.dropTableIfExists('profiles');
   await knex.schema.dropTableIfExists('users');
 };

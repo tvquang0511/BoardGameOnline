@@ -23,3 +23,12 @@ exports.updateMe = async (req, res, next) => {
     next(e);
   }
 };
+
+exports.myStats = async (req, res, next) => {
+  try {
+    const stats = await Profile.stats(req.user.sub);
+    res.json({ stats });
+  } catch (e) {
+    next(e);
+  }
+};
