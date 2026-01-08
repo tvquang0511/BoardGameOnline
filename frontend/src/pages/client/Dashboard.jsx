@@ -82,11 +82,14 @@ export default function Dashboard({ onLogout }) {
             <Link to="/games">
               <Button className="bg-gradient-to-r from-blue-500 to-purple-600">Chơi ngay</Button>
             </Link>
-            <Link to="/friends">
+            <Link to="/messages">
               <Button variant="outline">Thách đấu bạn bè</Button>
             </Link>
             <Link to="/achievements">
               <Button variant="outline">Xem thành tựu</Button>
+            </Link>
+            <Link to="/ranking">
+              <Button variant="outline">Xếp hạng</Button>
             </Link>
           </CardContent>
         </Card>

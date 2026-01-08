@@ -92,7 +92,6 @@ export default function Profile({ onLogout }) {
                     <Edit className="w-4 h-4 mr-2" />
                     Chỉnh sửa hồ sơ
                   </Button>
-                  <Button variant="outline">Đổi mật khẩu</Button>
                 </div>
               </div>
               <div className="text-right">

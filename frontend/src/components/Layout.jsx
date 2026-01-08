@@ -13,7 +13,6 @@ export default function Layout({ children, onLogout }) {
     { name: 'Tin nhắn', href: '/messages', icon: MessageSquare },
     { name: 'Thành tựu', href: '/achievements', icon: Trophy },
     { name: 'Xếp hạng', href: '/ranking', icon: BarChart3 },
-    { name: 'Cài đặt', href: '/settings', icon: Settings },
   ];
 
   return (

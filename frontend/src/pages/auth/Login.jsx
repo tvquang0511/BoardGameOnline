@@ -1,29 +1,40 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Gamepad2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useAuth } from '../../context/AuthContext';
-import { authApi } from '../../api/auth.api';
+import { useNavigate, Link } from "react-router-dom";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Gamepad2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useAuth } from "../../context/AuthContext";
+import { authApi } from "../../api/auth.api";
+
+const schema = z.object({
+  email: z.string().min(1, "Email là bắt buộc").email("Email không hợp lệ"),
+  password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự"),
+  rememberMe: z.boolean().optional().default(false),
+});
 
 export default function Login() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", password: "", rememberMe: false },
+  });
+
+  const onSubmit = async (values) => {
     try {
-      const data = await authApi.login({ email, password }); // { user, token }
+      const data = await authApi.login({ email: values.email, password: values.password });
       await auth.login({ user: data.user, token: data.token });
-      navigate(data.user?.role === 'admin' ? '/admin' : '/');
+      navigate(data.user?.role === "admin" ? "/admin" : "/");
     } catch (err) {
-      alert(err?.response?.data?.message || 'Đăng nhập thất bại');
+      form.setError("root", { message: err?.response?.data?.message || "Đăng nhập thất bại" });
     }
   };
 
@@ -39,58 +50,79 @@ export default function Login() {
           <CardTitle className="text-3xl">Board Game Hub</CardTitle>
           <CardDescription>Đăng nhập để bắt đầu chơi game</CardDescription>
         </CardHeader>
+
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {form.formState.errors.root?.message ? (
+                <div className="text-sm text-red-600">{form.formState.errors.root.message}</div>
+              ) : null}
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="your@email.com" type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Mật khẩu</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mật khẩu</FormLabel>
+                    <FormControl>
+                      <Input placeholder="••••••••" type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="remember"
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked)}
-              />
-              <label
-                htmlFor="remember"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Ghi nhớ đăng nhập
-              </label>
-            </div>
-            <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-600">
-              Đăng nhập
-            </Button>
-            <div className="text-center space-y-2">
-              <p className="text-sm text-gray-600">
-                Chưa có tài khoản?{' '}
-                <Link to="/register" className="text-blue-600 hover:underline">
-                  Đăng ký ngay
-                </Link>
-              </p>
-              <p className="text-xs text-gray-500 italic">
-                Gợi ý: admin@game.com / 123456 (seed)
-              </p>
-            </div>
-          </form>
+
+              <div className="flex items-center space-x-2">
+                <FormField
+                  control={form.control}
+                  name="rememberMe"
+                  render={({ field }) => (
+                    <>
+                      <Checkbox
+                        id="remember"
+                        checked={!!field.value}
+                        onCheckedChange={(checked) => field.onChange(!!checked)}
+                      />
+                      <label
+                        htmlFor="remember"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Ghi nhớ đăng nhập
+                      </label>
+                    </>
+                  )}
+                />
+              </div>
+
+              <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-600" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+              </Button>
+
+              <div className="text-center space-y-2">
+                <p className="text-sm text-gray-600">
+                  Chưa có tài khoản?{" "}
+                  <Link to="/register" className="text-blue-600 hover:underline">
+                    Đăng ký ngay
+                  </Link>
+                </p>
+                <p className="text-xs text-gray-500 italic">Gợi ý: admin@game.com / 123456 (seed)</p>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
