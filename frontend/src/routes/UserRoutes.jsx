@@ -2,8 +2,11 @@ import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 
 import Dashboard from '../pages/client/Dashboard';
-import GameSelection from '../pages/client/GameSelection';
-import GamePlay from '../pages/client/GamePlay';
+
+// ✅ NEW PAGES
+import GamesPage from '../pages/games/GamesPage';
+import GameShell from '../pages/games/GameShell';
+
 import Profile from '../pages/client/Profile';
 import Friends from '../pages/client/Friends';
 import Messages from '../pages/client/Messages';
@@ -11,10 +14,6 @@ import Achievements from '../pages/client/Achievements';
 import Ranking from '../pages/client/Ranking';
 import Settings from '../pages/client/Settings';
 
-/**
- * Trả về fragment các Route cho phần user/client (path đầy đủ).
- * Gọi hàm này từ trong <Routes> (ví dụ: {UserRoutes({ ... })})
- */
 export default function UserRoutes({ onLogout, isAuthenticated }) {
   return (
     <>
@@ -23,14 +22,19 @@ export default function UserRoutes({ onLogout, isAuthenticated }) {
         index
         element={isAuthenticated ? <Dashboard onLogout={onLogout} /> : <Navigate to="/login" replace />}
       />
+
+      {/* ✅ replace /games */}
       <Route
         path="/games"
-        element={isAuthenticated ? <GameSelection onLogout={onLogout} /> : <Navigate to="/login" replace />}
+        element={isAuthenticated ? <GamesPage onLogout={onLogout} /> : <Navigate to="/login" replace />}
       />
+
+      {/* ✅ replace /game/:gameId */}
       <Route
         path="/game/:gameId"
-        element={isAuthenticated ? <GamePlay onLogout={onLogout} /> : <Navigate to="/login" replace />}
+        element={isAuthenticated ? <GameShell onLogout={onLogout} /> : <Navigate to="/login" replace />}
       />
+
       <Route
         path="/profile"
         element={isAuthenticated ? <Profile onLogout={onLogout} /> : <Navigate to="/login" replace />}
