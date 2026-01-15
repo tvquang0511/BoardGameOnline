@@ -4,7 +4,9 @@ const { requireAuth } = require('../middlewares/auth.middleware');
 
 router.use(requireAuth);
 
-router.get('/conversations', messages.conversations);
+// NEW: friends list for messenger left column
+router.get('/contacts', messages.contacts);
+
 router.get('/', messages.list);
 router.post('/', messages.send);
 router.post('/:id/read', messages.read);
