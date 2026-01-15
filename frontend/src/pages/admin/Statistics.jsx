@@ -20,7 +20,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   AreaChart,
   Area,
@@ -69,7 +68,16 @@ export default function Statistics({ onLogout }) {
     return distribution.map((x) => ({ name: x.name, value: x.plays }));
   }, [distribution]);
 
-  const COLORS = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
+  // generate distinct colors for each game dynamically (no duplicates)
+  const colors = useMemo(() => {
+    const n = Math.max(1, gameDistribution.length);
+    // generate evenly spaced H values and convert to HSL
+    return new Array(n).fill(0).map((_, i) => {
+      const hue = Math.round((i * 360) / n);
+      // use slightly varied saturation/lightness for good contrast
+      return `hsl(${hue}, 70%, 48%)`;
+    });
+  }, [gameDistribution.length]);
 
   return (
     <AdminLayout onLogout={onLogout}>
@@ -154,16 +162,29 @@ export default function Statistics({ onLogout }) {
                         label
                       >
                         {gameDistribution.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
+                          <Cell key={`cell-${index}`} fill={colors[index]} />
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend verticalAlign="bottom" height={48} />
                     </PieChart>
                   </ResponsiveContainer>
+
+                  {/* Custom legend to ensure color/label mapping (no ambiguity) */}
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {gameDistribution.map((g, i) => (
+                      <div
+                        key={g.name}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span
+                          className="w-3 h-3 rounded-sm"
+                          style={{ background: colors[i] }}
+                        />
+                        <span className="text-gray-700">{g.name}</span>
+                        <span className="ml-2 text-gray-500">({g.value})</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>

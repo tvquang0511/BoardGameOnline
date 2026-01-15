@@ -51,4 +51,7 @@ export const adminApi = {
       .get("/admin/statistics/user-growth", { params: { months } })
       .then((r) => r.data);
   },
+  updateGame(id, payload) {
+    return http.patch(`/admin/games/${id}`, payload).then((r) => r.data);
+  },
 };

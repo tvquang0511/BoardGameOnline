@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const admin = require('../controllers/admin.controller');
 const adminStats = require('../controllers/admin.statistics.controller');
+const adminGames = require('../controllers/admin.game.controller');
 const { requireAuth, requireAdmin } = require('../middlewares/auth.middleware');
 
 router.use(requireAuth, requireAdmin);
@@ -19,5 +20,10 @@ router.get('/statistics/dau', adminStats.dau);
 router.get('/statistics/sessions-by-hour', adminStats.sessionsByHour);
 router.get('/statistics/game-distribution', adminStats.gameDistribution);
 router.get('/statistics/user-growth', adminStats.userGrowth);
+
+//Game Administration
+router.patch('/games/:id', adminGames.updateGame);
+
+
 
 module.exports = router;
