@@ -42,38 +42,39 @@ export default function Friends({ onLogout }) {
     reload();
   }, []);
 
-  const handleAccept = async (id) => {
+  // IMPORTANT: id ở đây phải là friendship_id (id của bảng friends)
+  const handleAccept = async (friendshipId) => {
     try {
-      await friendsApi.accept(id);
+      await friendsApi.accept(friendshipId);
       await reload();
     } catch (error) {
       console.error('Lỗi khi chấp nhận:', error);
     }
   };
 
-  const handleReject = async (id) => {
+  const handleReject = async (friendshipId) => {
     try {
-      await friendsApi.reject(id);
+      await friendsApi.reject(friendshipId);
       await reload();
     } catch (error) {
       console.error('Lỗi khi từ chối:', error);
     }
   };
 
-  const handleCancel = async (id) => {
+  const handleCancel = async (friendshipId) => {
     try {
-      await friendsApi.cancel(id);
+      await friendsApi.cancel(friendshipId);
       await reload();
     } catch (error) {
       console.error('Lỗi khi hủy:', error);
     }
   };
 
-  const handleUnfriend = async (id) => {
+  const handleUnfriend = async (friendshipId) => {
     if (!window.confirm('Bạn có chắc chắn muốn hủy kết bạn?')) return;
-    
+
     try {
-      await friendsApi.unfriend(id);
+      await friendsApi.unfriend(friendshipId);
       await reload();
     } catch (error) {
       console.error('Lỗi khi hủy kết bạn:', error);
@@ -116,7 +117,7 @@ export default function Friends({ onLogout }) {
   const filteredFriends = useMemo(() => {
     if (!searchQuery) return friends;
     const query = searchQuery.toLowerCase();
-    return friends.filter(friend => 
+    return friends.filter((friend) =>
       friend.username?.toLowerCase().includes(query) ||
       friend.display_name?.toLowerCase().includes(query) ||
       friend.email?.toLowerCase().includes(query)
@@ -201,7 +202,7 @@ export default function Friends({ onLogout }) {
               <CardHeader>
                 <CardTitle>Danh sách bạn bè</CardTitle>
                 <CardDescription>
-                  {searchQuery 
+                  {searchQuery
                     ? `Tìm thấy ${filteredFriends.length} bạn bè cho "${searchQuery}"`
                     : `Bạn có ${friends.length} người bạn`}
                 </CardDescription>
@@ -209,14 +210,12 @@ export default function Friends({ onLogout }) {
               <CardContent>
                 {filteredFriends.length === 0 ? (
                   <div className="text-center py-10 text-gray-500">
-                    {searchQuery 
-                      ? 'Không tìm thấy bạn bè nào phù hợp'
-                      : 'Bạn chưa có bạn bè nào. Hãy tìm và kết bạn!'}
+                    {searchQuery ? 'Không tìm thấy bạn bè nào phù hợp' : 'Bạn chưa có bạn bè nào. Hãy tìm và kết bạn!'}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredFriends.map((friend) => (
-                      <div key={friend.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                      <div key={friend.friendship_id ?? friend.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                         <div className="flex items-center gap-4">
                           <div className="relative">
                             <Avatar className="w-12 h-12">
@@ -233,12 +232,21 @@ export default function Friends({ onLogout }) {
                             </div>
                           </div>
                         </div>
+
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => window.location.href = `/messages?to=${friend.id}`}>
+                          <Button size="sm" variant="outline" onClick={() => (window.location.href = `/messages?to=${friend.user_id ?? friend.id}`)}>
                             <MessageSquare className="w-4 h-4 mr-1" />
                             Nhắn tin
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleUnfriend(friend.id)}>
+
+                          {/* FIX: unfriend phải truyền friendship_id */}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleUnfriend(friend.friendship_id)}
+                            disabled={!friend.friendship_id}
+                            title={!friend.friendship_id ? 'Thiếu friendship_id từ API' : ''}
+                          >
                             <UserX className="w-4 h-4 mr-1" />
                             Hủy kết bạn
                           </Button>
@@ -260,13 +268,11 @@ export default function Friends({ onLogout }) {
               </CardHeader>
               <CardContent>
                 {incoming.length === 0 ? (
-                  <div className="text-center py-10 text-gray-500">
-                    Không có lời mời kết bạn nào
-                  </div>
+                  <div className="text-center py-10 text-gray-500">Không có lời mời kết bạn nào</div>
                 ) : (
                   <div className="space-y-4">
                     {incoming.map((request) => (
-                      <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={request.friendship_id ?? request.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="flex items-center gap-4">
                           <Avatar className="w-12 h-12">
                             <AvatarImage src={getAvatarUrl(request)} />
@@ -276,18 +282,29 @@ export default function Friends({ onLogout }) {
                             <p className="font-semibold">{request.display_name || request.username}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <Badge variant="secondary">Level {request.level}</Badge>
-                              <span className="text-xs text-gray-500">
-                                Gửi ngày {formatDate(request.created_at)}
-                              </span>
+                              <span className="text-xs text-gray-500">Gửi ngày {formatDate(request.created_at)}</span>
                             </div>
                           </div>
                         </div>
+
                         <div className="flex gap-2">
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAccept(request.id)}>
+                          {/* FIX: accept/reject phải truyền friendship_id */}
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700"
+                            onClick={() => handleAccept(request.friendship_id)}
+                            disabled={!request.friendship_id}
+                          >
                             <Check className="w-4 h-4 mr-1" />
                             Chấp nhận
                           </Button>
-                          <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => handleReject(request.id)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleReject(request.friendship_id)}
+                            disabled={!request.friendship_id}
+                          >
                             <X className="w-4 h-4 mr-1" />
                             Từ chối
                           </Button>
@@ -309,13 +326,11 @@ export default function Friends({ onLogout }) {
               </CardHeader>
               <CardContent>
                 {outgoing.length === 0 ? (
-                  <div className="text-center py-10 text-gray-500">
-                    Bạn chưa gửi lời mời kết bạn nào
-                  </div>
+                  <div className="text-center py-10 text-gray-500">Bạn chưa gửi lời mời kết bạn nào</div>
                 ) : (
                   <div className="space-y-4">
                     {outgoing.map((request) => (
-                      <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={request.friendship_id ?? request.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="flex items-center gap-4">
                           <Avatar className="w-12 h-12">
                             <AvatarImage src={getAvatarUrl(request)} />
@@ -325,13 +340,13 @@ export default function Friends({ onLogout }) {
                             <p className="font-semibold">{request.display_name || request.username}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <Badge variant="secondary">Level {request.level}</Badge>
-                              <span className="text-xs text-gray-500">
-                                Gửi ngày {formatDate(request.created_at)}
-                              </span>
+                              <span className="text-xs text-gray-500">Gửi ngày {formatDate(request.created_at)}</span>
                             </div>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => handleCancel(request.id)}>
+
+                        {/* FIX: cancel phải truyền friendship_id */}
+                        <Button size="sm" variant="outline" onClick={() => handleCancel(request.friendship_id)} disabled={!request.friendship_id}>
                           Hủy lời mời
                         </Button>
                       </div>
@@ -347,18 +362,12 @@ export default function Friends({ onLogout }) {
             <Card>
               <CardHeader>
                 <CardTitle>Gợi ý kết bạn</CardTitle>
-                <CardDescription>
-                  {searchQuery 
-                    ? `Gợi ý cho "${searchQuery}"`
-                    : 'Những người bạn có thể muốn kết bạn'}
-                </CardDescription>
+                <CardDescription>{searchQuery ? `Gợi ý cho "${searchQuery}"` : 'Những người bạn có thể muốn kết bạn'}</CardDescription>
               </CardHeader>
               <CardContent>
                 {suggestions.length === 0 ? (
                   <div className="text-center py-10 text-gray-500">
-                    {searchQuery 
-                      ? 'Không tìm thấy người dùng nào'
-                      : 'Không có gợi ý nào vào lúc này'}
+                    {searchQuery ? 'Không tìm thấy người dùng nào' : 'Không có gợi ý nào vào lúc này'}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -375,9 +384,7 @@ export default function Friends({ onLogout }) {
                               <Badge variant="secondary">Level {user.level}</Badge>
                               <span className="text-xs text-gray-500">@{user.username}</span>
                             </div>
-                            {user.mutual_friends > 0 && (
-                              <p className="text-xs text-blue-600 mt-1">{user.mutual_friends} bạn chung</p>
-                            )}
+                            {user.mutual_friends > 0 && <p className="text-xs text-blue-600 mt-1">{user.mutual_friends} bạn chung</p>}
                           </div>
                         </div>
                         <Button size="sm" onClick={() => handleRequest(user.user_id)}>
