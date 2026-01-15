@@ -1,4 +1,5 @@
 const db = require('../db/knex');
+const SessionStats = require('../models/admin.model');
 
 /**
  * GET /api/admin/statistics/dau?days=7
@@ -50,17 +51,30 @@ exports.sessionsByHour = async (req, res, next) => {
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rows = await db('auth_sessions')
+    // Count auth_sessions by hour (started_at)
+    const authRows = await db('auth_sessions')
       .where('started_at', '>=', from.toISOString())
       .select(db.raw("extract(hour from started_at) as hour"))
       .count('* as count')
-      .groupBy('hour')
-      .orderBy('hour');
+      .groupBy('hour');
+
+    // Count finished game sessions by hour (ended_at)
+    const gameRows = await db('sessions')
+      .whereNotNull('ended_at')
+      .andWhere('ended_at', '>=', from.toISOString())
+      .andWhere('status', 'finished')
+      .select(db.raw("extract(hour from ended_at) as hour"))
+      .count('* as count')
+      .groupBy('hour');
 
     const map = new Map();
-    rows.forEach((r) => {
+    authRows.forEach((r) => {
       const h = parseInt(r.hour, 10);
-      map.set(h, parseInt(r.count, 10));
+      map.set(h, (map.get(h) || 0) + parseInt(r.count, 10));
+    });
+    gameRows.forEach((r) => {
+      const h = parseInt(r.hour, 10);
+      map.set(h, (map.get(h) || 0) + parseInt(r.count, 10));
     });
 
     const result = [];
@@ -76,26 +90,11 @@ exports.sessionsByHour = async (req, res, next) => {
 
 exports.gameDistribution = async (req, res, next) => {
   try {
-    const rows = await db('game_results')
-      .join('games', 'game_results.game_id', 'games.id')
-      .select('games.id as game_id', 'games.name')
-      .count('* as plays')
-      .groupBy('games.id', 'games.name')
-      .orderBy('plays', 'desc');
+    const rows = await SessionStats.gameDistribution();
 
-    const total = rows.reduce((s, r) => s + parseInt(r.plays, 10), 0) || 0;
-
-    const distribution = rows.map((r) => {
-      const plays = parseInt(r.plays, 10);
-      return {
-        game_id: r.game_id,
-        name: r.name,
-        plays,
-        percent: total ? +(plays / total * 100).toFixed(2) : 0,
-      };
-    });
-
-    res.json({ total_plays: total, distribution });
+    // Backend returns rows with game_id, name, plays
+    // Optionally compute percent if needed on frontend
+    res.json({ distribution: rows });
   } catch (err) {
     next(err);
   }

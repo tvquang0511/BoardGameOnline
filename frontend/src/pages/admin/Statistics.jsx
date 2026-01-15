@@ -1,12 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
-import AdminLayout from '../../components/AdminLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useEffect, useMemo, useState } from "react";
+import AdminLayout from "../../components/AdminLayout";
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
-} from 'recharts';
-import { adminApi } from '../../api/admin.api';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from "recharts";
+import { adminApi } from "../../api/admin.api";
 
 export default function Statistics({ onLogout }) {
   const [dau, setDau] = useState([]);
@@ -19,7 +38,7 @@ export default function Statistics({ onLogout }) {
       try {
         const [d, h, g] = await Promise.all([
           adminApi.dau(7),
-          adminApi.sessionsByHour(),
+          adminApi.gamesessionByHour(),
           adminApi.gameDistribution(),
         ]);
         if (!mounted) return;
@@ -30,7 +49,9 @@ export default function Statistics({ onLogout }) {
         // TODO(API): error state
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const dailyActiveUsers = useMemo(() => {
@@ -39,7 +60,7 @@ export default function Statistics({ onLogout }) {
 
   const gameSessionsData = useMemo(() => {
     return hours.map((x) => ({
-      hour: String(x.hour).padStart(2, '0') + ':00',
+      hour: String(x.hour).padStart(2, "0") + ":00",
       sessions: x.count,
     }));
   }, [hours]);
@@ -48,7 +69,7 @@ export default function Statistics({ onLogout }) {
     return distribution.map((x) => ({ name: x.name, value: x.plays }));
   }, [distribution]);
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+  const COLORS = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 
   return (
     <AdminLayout onLogout={onLogout}>
@@ -80,7 +101,12 @@ export default function Statistics({ onLogout }) {
                       <XAxis dataKey="date" />
                       <YAxis />
                       <Tooltip />
-                      <Area type="monotone" dataKey="users" stroke="#3b82f6" fill="#93c5fd" />
+                      <Area
+                        type="monotone"
+                        dataKey="users"
+                        stroke="#3b82f6"
+                        fill="#93c5fd"
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -94,7 +120,9 @@ export default function Statistics({ onLogout }) {
               <Card>
                 <CardHeader>
                   <CardTitle>Phiên theo giờ (24h)</CardTitle>
-                  <CardDescription>Session count trong 24 giờ gần đây</CardDescription>
+                  <CardDescription>
+                    Session count trong 24 giờ gần đây
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -115,15 +143,25 @@ export default function Statistics({ onLogout }) {
                   <CardDescription>Số lần chơi theo game</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={340}>
                     <PieChart>
-                      <Pie data={gameDistribution} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} label>
+                      <Pie
+                        data={gameDistribution}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={60}
+                        outerRadius={100}
+                        label
+                      >
                         {gameDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend />
+                      <Legend verticalAlign="bottom" height={48} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import {
   Card,
@@ -48,6 +48,13 @@ export default function UserManagement({ onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState([]);
 
+  // pagination / infinite scroll
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   // create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -63,16 +70,77 @@ export default function UserManagement({ onLogout }) {
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editing, setEditing] = useState(false);
 
-  const load = async (q = "") => {
-    const data = await adminApi.users({ q, page: 1, limit: 50 });
-    setUsers(data.users || []);
+  const sentinelRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+
+  const loadPage = async (targetPage = 1, reset = false, q = searchQuery) => {
+    if (targetPage === 1) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
+      const data = await adminApi.users({ q, page: targetPage, limit });
+      const items = data.users || [];
+
+      if (reset) {
+        setUsers(items);
+      } else {
+        setUsers((prev) => {
+          // avoid duplicates: check last item id
+          if (!prev.length) return items;
+          const ids = new Set(prev.map((p) => p.id));
+          const newItems = items.filter((it) => !ids.has(it.id));
+          return [...prev, ...newItems];
+        });
+      }
+
+      setHasMore(items.length === limit);
+      setPage(targetPage);
+    } catch (err) {
+      // TODO: show nicer error UI
+      console.error("Failed to load users", err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {
-    load("").catch(() => {
-      // TODO(API): error state
-    });
+    // initial load
+    loadPage(1, true).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // observe sentinel to trigger loading more
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !loadingMore && !loading && hasMore) {
+            loadPage(page + 1, false).catch(() => {});
+          }
+        });
+      },
+      { root: null, rootMargin: "200px", threshold: 0.1 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, loadingMore, loading, hasMore]);
+
+  // search handler with small debounce and reset pagination
+  const handleSearchChange = (v) => {
+    setSearchQuery(v);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      loadPage(1, true, v).catch(() => {});
+    }, 250);
+  };
 
   const getStatusBadge = (u) => {
     const status = u.is_enabled ? "active" : "inactive";
@@ -88,7 +156,8 @@ export default function UserManagement({ onLogout }) {
 
   const handleToggleEnabled = async (u) => {
     await adminApi.updateUser(u.id, { is_enabled: !u.is_enabled });
-    await load(searchQuery);
+    // refresh current page results
+    loadPage(1, true, searchQuery).catch(() => {});
   };
 
   const handleCreateUser = async () => {
@@ -103,8 +172,8 @@ export default function UserManagement({ onLogout }) {
         password: newPassword,
         display_name: newDisplayName,
       });
-      // reload list and close
-      await load(searchQuery);
+      // reload first page
+      await loadPage(1, true);
       setCreateOpen(false);
       setNewEmail("");
       setNewPassword("");
@@ -140,7 +209,7 @@ export default function UserManagement({ onLogout }) {
       if (editPassword && editPassword.length > 0)
         payload.password = editPassword;
       await adminApi.updateUser(editingUser.id, payload);
-      await load(searchQuery);
+      await loadPage(1, true, searchQuery);
       setEditOpen(false);
       setEditingUser(null);
       setEditEmail("");
@@ -167,7 +236,7 @@ export default function UserManagement({ onLogout }) {
     if (!ok) return;
     try {
       await adminApi.deleteUser(u.id);
-      await load(searchQuery);
+      await loadPage(1, true, searchQuery);
       alert("Xóa thành công");
     } catch (err) {
       const msg =
@@ -319,7 +388,8 @@ export default function UserManagement({ onLogout }) {
               <div>
                 <CardTitle>Danh sách người dùng</CardTitle>
                 <CardDescription>
-                  Tổng số {users.length} người dùng
+                  Tổng số {users.length} người dùng (hiển thị{" "}
+                  {Math.min(users.length, page * limit)})
                 </CardDescription>
               </div>
               <div className="relative w-64">
@@ -328,11 +398,7 @@ export default function UserManagement({ onLogout }) {
                   placeholder="Tìm kiếm..."
                   className="pl-10"
                   value={searchQuery}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSearchQuery(v);
-                    load(v).catch(() => {});
-                  }}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
             </div>
@@ -414,6 +480,24 @@ export default function UserManagement({ onLogout }) {
                 })}
               </TableBody>
             </Table>
+
+            {/* sentinel for infinite scroll */}
+            <div
+              ref={sentinelRef}
+              className="h-8 flex items-center justify-center mt-4"
+            >
+              {loadingMore && (
+                <span className="text-sm text-gray-500">Đang tải thêm...</span>
+              )}
+              {!hasMore && !loading && (
+                <span className="text-sm text-gray-500">Đã tải hết</span>
+              )}
+            </div>
+
+            {/* initial/global loading */}
+            {loading && users.length === 0 && (
+              <div className="py-6 text-center text-gray-500">Đang tải...</div>
+            )}
           </CardContent>
         </Card>
       </div>

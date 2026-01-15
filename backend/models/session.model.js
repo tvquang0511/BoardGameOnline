@@ -41,4 +41,19 @@ module.exports = {
       .returning('*');
     return row;
   },
+  async sessionsByHour(hours = 24) {
+    const now = new Date();
+    const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
+
+    const rows = await db('sessions')
+      .whereNotNull('ended_at')
+      .andWhere('ended_at', '>=', from.toISOString())
+      .andWhere('status', 'finished')
+      .select(db.raw("extract(hour from ended_at) as hour"))
+      .count('* as count')
+      .groupBy('hour')
+      .orderBy('hour');
+
+    return rows.map((r) => ({ hour: parseInt(r.hour, 10), count: parseInt(r.count, 10) }));
+  },
 };

@@ -1,3 +1,4 @@
+// backend/controllers/session.controller.js
 const Game = require('../models/game.model');
 const Session = require('../models/session.model');
 const db = require('../db/knex');
@@ -8,6 +9,7 @@ exports.start = async (req, res, next) => {
     const game = await Game.findBySlug(gameSlug);
     if (!game) return res.status(404).json({ message: 'Game not found' });
 
+    // start session (inserts into sessions table)
     const session = await Session.start({ user_id: req.user.sub, game_id: game.id, mode, state });
     res.status(201).json({ session, game });
   } catch (e) { next(e); }
@@ -26,10 +28,11 @@ exports.finish = async (req, res, next) => {
   try {
     const { result = 'win', score = 0, duration_seconds = 0 } = req.body;
 
+    // mark session finished (sets status, ended_at, score, duration_seconds)
     const session = await Session.finish(req.params.id, req.user.sub, { score, duration_seconds, status: 'finished' });
     if (!session) return res.status(404).json({ message: 'Session not found' });
 
-    // write game_results for leaderboard
+    // ensure game_results row is inserted for leaderboard / statistics
     await db('game_results').insert({
       user_id: req.user.sub,
       game_id: session.game_id,
@@ -37,6 +40,7 @@ exports.finish = async (req, res, next) => {
       score,
       duration_seconds,
       result,
+      created_at: db.fn.now(),
     });
 
     res.json({ session });
@@ -50,4 +54,22 @@ exports.getById = async (req, res, next) => {
     if (s.user_id !== req.user.sub && req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
     res.json({ session: s });
   } catch (e) { next(e); }
+};
+
+exports.sessionsByHour = async (req, res, next) => {
+  try {
+    // optionally allow custom hours via query (default 24)
+    const hours = Math.max(1, parseInt(req.query.hours || '24', 10));
+    const rows = await Session.sessionsByHour(hours);
+
+    const map = new Map(rows.map((r) => [r.hour, r.count]));
+    const result = [];
+    for (let h = 0; h < 24; h++) {
+      result.push({ hour: h, count: map.get(h) || 0 });
+    }
+
+    res.json({ hours: result });
+  } catch (err) {
+    next(err);
+  }
 };
