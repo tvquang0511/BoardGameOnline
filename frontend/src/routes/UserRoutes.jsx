@@ -11,6 +11,7 @@ import Friends from '../pages/client/Friends';
 import Messages from '../pages/client/Messages';
 import Achievements from '../pages/client/Achievements';
 import Ranking from '../pages/client/Ranking';
+import EditProfile from '../pages/client/EditProfile';
 
 export default function UserRoutes({ onLogout, isAuthenticated }) {
   return (
@@ -34,6 +35,7 @@ export default function UserRoutes({ onLogout, isAuthenticated }) {
       <Route path="/messages" element={isAuthenticated ? <Messages onLogout={onLogout} /> : <Navigate to="/login" replace />} />
       <Route path="/achievements" element={isAuthenticated ? <Achievements onLogout={onLogout} /> : <Navigate to="/login" replace />} />
       <Route path="/ranking" element={isAuthenticated ? <Ranking onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+      <Route path="/profile/edit" element={isAuthenticated ? <EditProfile onLogout={onLogout} /> : <Navigate to="/login" replace />} />
     </>
   );
 }

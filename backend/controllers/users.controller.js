@@ -1,4 +1,4 @@
-const db = require('../db/knex');
+const User = require('../models/user.model');
 
 exports.search = async (req, res, next) => {
   try {
@@ -7,29 +7,24 @@ exports.search = async (req, res, next) => {
 
     if (!q) return res.json({ users: [] });
 
-    const users = await db('profiles')
-      .join('users', 'profiles.user_id', 'users.id')
-      .select(
-        'users.id',
-        'users.email',
-        'users.role',
-        'users.is_enabled',
-        'profiles.username',
-        'profiles.display_name',
-        'profiles.avatar_url',
-        'profiles.level',
-        'profiles.points'
-      )
-      .where('users.is_enabled', true)
-      .andWhere(function () {
-        this.where('profiles.username', 'ilike', `%${q}%`)
-          .orWhere('profiles.display_name', 'ilike', `%${q}%`)
-          .orWhere('users.email', 'ilike', `%${q}%`);
-      })
-      .orderBy('profiles.points', 'desc')
-      .limit(limit);
+    const users = await User.searchUsers(q, limit);
+    
+    // Format lại response
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      display_name: user.display_name,
+      avatar_url: user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`,
+      level: user.level,
+      points: user.points,
+      bio: user.bio,
+      role: user.role,
+      is_enabled: user.is_enabled,
+      created_at: user.created_at
+    }));
 
-    res.json({ users });
+    res.json({ users: formattedUsers });
   } catch (e) {
     next(e);
   }

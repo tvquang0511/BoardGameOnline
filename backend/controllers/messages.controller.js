@@ -1,10 +1,14 @@
 const Message = require('../models/message.model');
 
-exports.conversations = async (req, res, next) => {
+exports.contacts = async (req, res, next) => {
   try {
-    const conversations = await Message.listConversations(req.user.sub);
-    res.json({ conversations });
-  } catch (e) { next(e); }
+    const q = (req.query.q || '').trim();
+    const limit = parseInt(req.query.limit || '50', 10);
+    const contacts = await Message.listContacts(req.user.sub, { q, limit });
+    res.json({ contacts });
+  } catch (e) {
+    next(e);
+  }
 };
 
 exports.list = async (req, res, next) => {
@@ -17,7 +21,12 @@ exports.list = async (req, res, next) => {
 
     const messages = await Message.listWithUser({ me: req.user.sub, withUser, page, limit });
     res.json({ messages });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e && e.message === 'NOT_FRIENDS') {
+      return res.status(403).json({ message: 'Chỉ có thể nhắn tin với bạn bè' });
+    }
+    next(e);
+  }
 };
 
 exports.send = async (req, res, next) => {
@@ -25,9 +34,19 @@ exports.send = async (req, res, next) => {
     const { receiverId, content } = req.body;
     if (!receiverId || !content) return res.status(400).json({ message: 'receiverId and content required' });
 
-    const msg = await Message.send({ sender_id: req.user.sub, receiver_id: receiverId, content });
+    const msg = await Message.send({
+      sender_id: req.user.sub,
+      receiver_id: Number(receiverId),
+      content: String(content),
+    });
+
     res.status(201).json({ message: msg });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e && e.message === 'NOT_FRIENDS') {
+      return res.status(403).json({ message: 'Chỉ có thể nhắn tin với bạn bè' });
+    }
+    next(e);
+  }
 };
 
 exports.read = async (req, res, next) => {
@@ -35,5 +54,7 @@ exports.read = async (req, res, next) => {
     const msg = await Message.markRead(req.params.id, req.user.sub);
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     res.json({ message: msg });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
