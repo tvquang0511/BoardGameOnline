@@ -1,17 +1,17 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const validator = require('validator');
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const validator = require("validator");
+const db = require("../db/knex");
+const User = require("../models/user.model");
+const Profile = require("../models/profile.model");
 
-const User = require('../models/user.model');
-const Profile = require('../models/profile.model');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
+const JWT_SECRET = process.env.JWT_SECRET || "change_me";
 
 function signToken(user) {
   return jwt.sign(
     { sub: user.id, role: user.role, email: user.email },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: "7d" }
   );
 }
 
@@ -20,32 +20,38 @@ exports.register = async (req, res, next) => {
     const { email, password, username, display_name } = req.body || {};
 
     if (!email || !validator.isEmail(email)) {
-      return res.status(400).json({ message: 'Invalid email' });
+      return res.status(400).json({ message: "Invalid email" });
     }
     if (!password || password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 6 characters" });
     }
 
     const existed = await User.findByEmail(email);
-    if (existed) return res.status(409).json({ message: 'Email already exists' });
+    if (existed)
+      return res.status(409).json({ message: "Email already exists" });
 
     const password_hash = await bcrypt.hash(password, 10);
 
     // Always create new users with role 'user'. Admin must be assigned explicitly in DB or via admin APIs.
     const user = await User.create({
       email,
-      role: 'user',
+      role: "user",
       password_hash,
     });
 
     await Profile.create({
       user_id: user.id,
-      username: username || email.split('@')[0],
-      display_name: display_name || username || email.split('@')[0],
+      username: username || email.split("@")[0],
+      display_name: display_name || username || email.split("@")[0],
     });
 
     const token = signToken(user);
-    res.status(201).json({ user: { id: user.id, email: user.email, role: user.role }, token });
+    res.status(201).json({
+      user: { id: user.id, email: user.email, role: user.role },
+      token,
+    });
   } catch (err) {
     next(err);
   }
@@ -56,34 +62,55 @@ exports.login = async (req, res, next) => {
     const { email, password } = req.body || {};
 
     if (!email || !validator.isEmail(email)) {
-      return res.status(400).json({ message: 'Invalid email' });
+      return res.status(400).json({ message: "Invalid email" });
     }
 
     const user = await User.findByEmail(email);
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     if (!user.is_enabled) {
-      return res.status(403).json({ message: 'Account disabled' });
+      return res.status(403).json({ message: "Account disabled" });
     }
 
-    // No bypass allowed: always require password and validate it.
-    if (!password || typeof password !== 'string') {
-      return res.status(400).json({ message: 'Password required' });
+    if (!password || typeof password !== "string") {
+      return res.status(400).json({ message: "Password required" });
     }
 
     if (!user.password_hash) {
-      return res.status(401).json({ message: 'Account has no password set' });
+      return res.status(401).json({ message: "Account has no password set" });
     }
 
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
+    // update last_login_at
     await User.update(user.id, { last_login_at: new Date() });
 
-    const token = signToken(user);
-    res.json({ user: { id: user.id, email: user.email, role: user.role }, token });
+    // create auth_session record (so statistics will have data)
+    try {
+      const ip =
+        (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim() ||
+        null;
+      const user_agent = req.get("User-Agent") || null;
+      const [session] = await db("auth_sessions")
+        .insert({ user_id: user.id, ip, user_agent })
+        .returning("*");
+
+      const token = signToken(user);
+      return res.json({
+        user: { id: user.id, email: user.email, role: user.role },
+        token,
+        session: { id: session ? session.id : null },
+      });
+    } catch (err) {
+      const token = signToken(user);
+      return res.json({
+        user: { id: user.id, email: user.email, role: user.role },
+        token,
+      });
+    }
   } catch (err) {
     next(err);
   }
@@ -91,7 +118,18 @@ exports.login = async (req, res, next) => {
 
 exports.logout = async (req, res, next) => {
   try {
-    // Stateless logout
+    // mark any open sessions for this user ended_at = now
+    try {
+      const userId = req.user && req.user.sub;
+      if (userId) {
+        await db("auth_sessions")
+          .where({ user_id: userId })
+          .whereNull("ended_at")
+          .update({ ended_at: db.fn.now() });
+      }
+    } catch (e) {
+      // ignore session update errors
+    }
     return res.json({ ok: true });
   } catch (err) {
     next(err);
