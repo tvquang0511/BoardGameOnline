@@ -13,8 +13,8 @@ export const friendsApi = {
     // GET /api/friends/outgoing
     return http.get("/friends/outgoing").then((r) => r.data);
   },
-  suggestions({ q, limit = 10 } = {}) {
-    // GET /api/friends/suggestions?q=&limit=
+  suggestions({ q, limit = 15 } = {}) {
+    // GET /api/friends/suggestions?q=&limit=15
     return http.get("/friends/suggestions", { params: { q, limit } }).then((r) => r.data);
   },
   request(userId) {
@@ -37,4 +37,10 @@ export const friendsApi = {
     // DELETE /api/friends/:id/unfriend
     return http.delete(`/friends/${id}/unfriend`).then((r) => r.data);
   },
+  
+  // Thêm API search riêng
+  searchUsers({ q, limit = 20 } = {}) {
+    // Gọi API users search nếu có, nếu không thì dùng suggestions
+    return http.get("/users/search", { params: { q, limit } }).then((r) => r.data);
+  }
 };
