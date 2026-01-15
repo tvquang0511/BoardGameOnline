@@ -9,4 +9,8 @@ export const achievementsApi = {
     // GET /api/achievements/me
     return http.get("/achievements/me").then((r) => r.data);
   },
+  progress() {
+    // GET /api/achievements/progress - with real progress calculation
+    return http.get("/achievements/progress").then((r) => r.data);
+  },
 };
