@@ -173,13 +173,18 @@ exports.accept = async (req, res, next) => {
     if (!row)
       return res.status(404).json({ message: "Không tìm thấy lời mời" });
 
-    // Check friend achievements
+    // Check friend achievements for BOTH users
     const unlockedAchievements = await AchievementService.checkAndUnlock(
       req.user.sub,
       {
         type: "friend_accepted",
       }
     );
+
+    // Also check for the requester
+    await AchievementService.checkAndUnlock(row.requester_id, {
+      type: "friend_accepted",
+    });
 
     res.json({ friend: row, achievements_unlocked: unlockedAchievements });
   } catch (e) {

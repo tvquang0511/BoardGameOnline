@@ -1,5 +1,6 @@
 const Game = require("../models/game.model");
 const Session = require("../models/session.model");
+const Profile = require("../models/profile.model");
 const db = require("../db/knex");
 const AchievementService = require("../services/achievement.service");
 
@@ -57,6 +58,13 @@ exports.finish = async (req, res, next) => {
       result,
     });
 
+    // Award points and update level
+    const pointsResult = await Profile.addGamePoints(req.user.sub, {
+      result,
+      score,
+      duration_seconds,
+    });
+
     // Check and unlock achievements
     const unlockedAchievements = await AchievementService.checkAndUnlock(
       req.user.sub,
@@ -69,7 +77,13 @@ exports.finish = async (req, res, next) => {
       }
     );
 
-    res.json({ session, achievements_unlocked: unlockedAchievements });
+    res.json({
+      session,
+      achievements_unlocked: unlockedAchievements,
+      points_earned: pointsResult?.earned_points || 0,
+      level_up: pointsResult?.level_up || false,
+      new_level: pointsResult?.new_level || 1,
+    });
   } catch (e) {
     next(e);
   }

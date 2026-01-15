@@ -22,8 +22,8 @@ class AchievementService {
           .where({
             user_id,
             achievement_id: ach.id,
-            unlocked_at: db.raw("IS NOT NULL"),
           })
+          .whereNotNull("unlocked_at")
           .first();
 
         if (existing?.unlocked_at) continue;
@@ -206,7 +206,7 @@ class AchievementService {
       if (!profile) return;
 
       const newPoints = (profile.points || 0) + points;
-      const newLevel = Math.floor(1 + Math.sqrt(newPoints / 100)); // Simple level formula
+      const newLevel = Math.floor(1 + Math.sqrt(newPoints / 500)); // Level formula: √(points/500) + 1
 
       await db("profiles")
         .where({ user_id })
@@ -346,6 +346,46 @@ class AchievementService {
     );
 
     return results;
+  }
+
+  /**
+   * Recheck all achievements for a user (useful for retroactive unlocks)
+   * @param {number} user_id
+   * @returns {Promise<Array>} List of newly unlocked achievements
+   */
+  async recheckAll(user_id) {
+    try {
+      const achievements = await db("achievements").select("*");
+      const unlocked = [];
+
+      for (const ach of achievements) {
+        // Skip if already unlocked
+        const existing = await db("user_achievements")
+          .where({ user_id, achievement_id: ach.id })
+          .whereNotNull("unlocked_at")
+          .first();
+
+        if (existing?.unlocked_at) continue;
+
+        // Check eligibility without event context
+        const eligible = await this._checkEligibility(user_id, ach, {});
+        if (eligible) {
+          const result = await this._unlock(user_id, ach.id);
+          if (result) {
+            unlocked.push(ach);
+            await this._awardPoints(user_id, ach.points);
+          }
+        } else {
+          // Update progress
+          await this._updateProgress(user_id, ach);
+        }
+      }
+
+      return unlocked;
+    } catch (err) {
+      console.error("Achievement recheck error:", err);
+      return [];
+    }
   }
 }
 
