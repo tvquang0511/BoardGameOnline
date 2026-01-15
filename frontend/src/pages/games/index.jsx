@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { sessionsApi } from "@/api/sessions.api";
+import { savedGamesApi } from "@/api/savedGames.api";
 import { attachInput } from "./input";
 import { wrap } from "./utils";
 
@@ -75,6 +85,14 @@ function reducer(state, action) {
 
   if (action.type === "GAME") {
     const { gameId, gameAction } = action;
+
+    // Handle RESTORE_STATE action
+    if (gameAction.type === "RESTORE_STATE") {
+      s[gameId] = JSON.parse(JSON.stringify(gameAction.state)); // Deep copy to avoid reference issues
+      console.log("📦 RESTORE_STATE:", gameId, s[gameId]);
+      return s;
+    }
+
     if (gameId === "caro4") s.caro4 = stepCaro(s.caro4, gameAction);
     if (gameId === "caro5") s.caro5 = stepCaro(s.caro5, gameAction);
     if (gameId === "tictactoe") s.tictactoe = stepTtt(s.tictactoe, gameAction);
@@ -103,13 +121,29 @@ export default function GamesPage({ onLogout }) {
   const [sessionId, setSessionId] = useState(null);
   const [sessionFinished, setSessionFinished] = useState(false);
   const [gameResult, setGameResult] = useState(null); // 'win', 'lose', 'draw'
+  const [showContinueDialog, setShowContinueDialog] = useState(false);
+  const [pendingGameId, setPendingGameId] = useState(null);
+  const [autoSaveData, setAutoSaveData] = useState(null);
 
   const winner = (() => {
     const id = state.activeGameId;
     if (id === "caro4") return state.caro4.winner;
     if (id === "caro5") return state.caro5.winner;
     if (id === "tictactoe") return state.tictactoe.winner;
-    if (id === "memory") return state.memory.done ? "WIN" : null;
+    if (id === "memory") {
+      const result = state.memory.done ? "WIN" : null;
+      if (result)
+        console.log(
+          "🏆 Memory winner detected:",
+          result,
+          "done:",
+          state.memory.done
+        );
+      return result;
+    }
+    if (id === "snake") return state.snake.dead ? "LOSE" : null;
+    if (id === "match3") return state.match3.score >= 1000 ? "WIN" : null;
+    if (id === "pixel") return state.pixel.score >= 500 ? "WIN" : null;
     return null;
   })();
 
@@ -188,6 +222,23 @@ export default function GamesPage({ onLogout }) {
     startSession();
   }, [state.mode, state.activeGameId, user, sessionId]);
 
+  // Show game result immediately when winner detected (independent of session API)
+  useEffect(() => {
+    if (!winner || !state.activeGameId) return;
+
+    const result =
+      winner === "X" || winner === "WIN"
+        ? "win"
+        : winner === "O" || winner === "LOSE"
+        ? "lose"
+        : winner === "DRAW"
+        ? "draw"
+        : "draw";
+
+    setGameResult(result);
+    console.log("🏆 Game result set:", result);
+  }, [winner, state.activeGameId]);
+
   // Auto-finish session when game ends (ONLY ONCE)
   useEffect(() => {
     if (!winner || !sessionId || !state.activeGameId || sessionFinished) return;
@@ -195,16 +246,13 @@ export default function GamesPage({ onLogout }) {
     const finishSession = async () => {
       try {
         const result =
-          winner === "X" || winner === "O"
-            ? winner === "X"
-              ? "win"
-              : "lose"
-            : winner === "WIN"
+          winner === "X" || winner === "WIN"
             ? "win"
+            : winner === "O" || winner === "LOSE"
+            ? "lose"
+            : winner === "DRAW"
+            ? "draw"
             : "draw";
-
-        // Show game result immediately (no delay)
-        setGameResult(result);
 
         // Capture score and time at the moment of finishing
         const finalScore = score;
@@ -231,13 +279,30 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner, sessionId, sessionFinished]);
 
-  const onSelect = () => {
+  const onSelect = async () => {
     const { r, c } = state.cursor;
 
     if (state.mode === "select") {
       const cell = findSelectCell(selectCells, r, c);
       if (!cell) return;
 
+      // Check for auto-save
+      try {
+        const { saved } = await savedGamesApi.list({ gameSlug: cell.gameId });
+        const autoSave = saved.find((s) => s.name === "__autosave__");
+
+        if (autoSave) {
+          // Found auto-save, ask user
+          setPendingGameId(cell.gameId);
+          setAutoSaveData(autoSave);
+          setShowContinueDialog(true);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to check auto-save:", error);
+      }
+
+      // No auto-save, start fresh
       dispatch({ type: "SET_MODE", mode: "play", activeGameId: cell.gameId });
       setTimeSeconds(0);
       setSessionId(null);
@@ -265,8 +330,26 @@ export default function GamesPage({ onLogout }) {
     });
   };
 
-  const onBack = () => {
+  const onBack = async () => {
     if (state.mode === "play") {
+      // Auto-save if game is in progress (not finished)
+      if (!winner && state.activeGameId) {
+        try {
+          await savedGamesApi.create({
+            gameSlug: state.activeGameId,
+            sessionId: sessionId,
+            name: "__autosave__",
+            data: {
+              gameState: state[state.activeGameId],
+              timeSeconds: timeSeconds,
+            },
+          });
+          console.log("💾 Auto-saved game");
+        } catch (error) {
+          console.error("Auto-save failed:", error);
+        }
+      }
+
       dispatch({ type: "RESET_GAME" }); // Reset game state to clear winner
       dispatch({ type: "SET_MODE", mode: "select", activeGameId: null });
       setTimeSeconds(0);
@@ -308,6 +391,49 @@ export default function GamesPage({ onLogout }) {
     () => attachInput({ onAction }),
     [state.mode, state.activeGameId, state.cursor, selectCells]
   );
+
+  const handleContinueGame = async () => {
+    try {
+      const { saved } = await savedGamesApi.getById(autoSaveData.id);
+      console.log("🔄 Loading saved game:", pendingGameId, saved.data);
+      // Start game with loaded state
+      dispatch({ type: "SET_MODE", mode: "play", activeGameId: pendingGameId });
+      dispatch({
+        type: "GAME",
+        gameId: pendingGameId,
+        gameAction: { type: "RESTORE_STATE", state: saved.data.gameState },
+      });
+      console.log("✅ State restored for", pendingGameId);
+      setTimeSeconds(saved.data.timeSeconds || 0);
+      setSessionId(null);
+      setSessionFinished(false);
+      setGameResult(null);
+      setShowContinueDialog(false);
+      // Delete auto-save after loading
+      await savedGamesApi.remove(autoSaveData.id);
+    } catch (error) {
+      console.error("Continue failed:", error);
+      alert("Load game thất bại!");
+    }
+  };
+
+  const handleStartFresh = async () => {
+    try {
+      // Delete auto-save
+      if (autoSaveData) {
+        await savedGamesApi.remove(autoSaveData.id);
+      }
+      // Start fresh game
+      dispatch({ type: "SET_MODE", mode: "play", activeGameId: pendingGameId });
+      setTimeSeconds(0);
+      setSessionId(null);
+      setSessionFinished(false);
+      setGameResult(null);
+      setShowContinueDialog(false);
+    } catch (error) {
+      console.error("Failed to delete auto-save:", error);
+    }
+  };
 
   const getCellView = (r, c) => {
     if (state.mode === "select") {
@@ -455,6 +581,24 @@ export default function GamesPage({ onLogout }) {
             </CardContent>
           </Card>
         ) : null}
+
+        {/* Continue Game Dialog */}
+        <Dialog open={showContinueDialog} onOpenChange={setShowContinueDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Tiếp tục game?</DialogTitle>
+              <DialogDescription>
+                Bạn có game đang dở, muốn tiếp tục hay bắt đầu mới?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={handleStartFresh}>
+                Bắt đầu mới
+              </Button>
+              <Button onClick={handleContinueGame}>Tiếp tục</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {GAME_CONFIGS.map((g) => (

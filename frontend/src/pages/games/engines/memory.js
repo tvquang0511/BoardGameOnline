@@ -9,16 +9,36 @@ function shuffle(a) {
   return arr;
 }
 
-const EMOJIS = ["🍎","🍌","🍇","🍒","🍓","🍍","🥝","🍉","🍑","🥥","🥑","🍋","🥕","🍪","🍩","🍿","🍫","🧁","🍰"];
+const EMOJIS = [
+  "🍎",
+  "🍌",
+  "🍇",
+  "🍒",
+  "🍓",
+  "🍍",
+  "🥝",
+  "🍉",
+  "🍑",
+  "🥥",
+  "🥑",
+  "🍋",
+  "🥕",
+  "🍪",
+  "🍩",
+  "🍿",
+  "🍫",
+  "🧁",
+  "🍰",
+];
 
 export function createMemory({ boardSize }) {
-  const size = 5; // ✅ 5x5
-  const total = size * size; // 25
+  const size = 4;
+  const total = size * size;
 
-  // 12 pairs + 1 joker
-  const pairs = Math.floor(total / 2); // 12
+  // 18 pairs
+  const pairs = total / 2; // 18
   const base = Array.from({ length: pairs }, (_, i) => i);
-  const ids = shuffle([...base, ...base, -1]); // -1 = joker
+  const ids = shuffle([...base, ...base]); // Perfect pairs
 
   const deck = ids.map((id) => ({
     id,
@@ -26,7 +46,15 @@ export function createMemory({ boardSize }) {
     matched: false,
   }));
 
-  return { boardSize, size, deck, opened: [], lock: false, score: 0, done: false };
+  return {
+    boardSize,
+    size,
+    deck,
+    opened: [],
+    lock: false,
+    score: 0,
+    done: false,
+  };
 }
 
 export function stepMemory(state, action) {
@@ -70,8 +98,8 @@ export function stepMemory(state, action) {
       const a = s.deck[x];
       const b = s.deck[y];
 
-      // Joker rule: joker (-1) matches with anything
-      const isMatch = a.id === b.id || a.id === -1 || b.id === -1;
+      // Check if cards match
+      const isMatch = a.id === b.id;
 
       if (isMatch) {
         a.matched = true;
@@ -79,14 +107,25 @@ export function stepMemory(state, action) {
         s.score += 20;
         s.opened = [];
         s.lock = false;
+
+        // Check if all cards are matched
+        const allMatched = s.deck.every((c) => c.matched);
+        console.log(
+          "Memory check done:",
+          allMatched,
+          "matched cards:",
+          s.deck.filter((c) => c.matched).length,
+          "total:",
+          s.deck.length
+        );
+        if (allMatched) {
+          s.done = true;
+          s.score += 50;
+          console.log("🎉 Memory game completed! done =", s.done);
+        }
       } else {
         s.lock = true;
       }
-    }
-
-    if (s.deck.every((c) => c.matched)) {
-      s.done = true;
-      s.score += 50;
     }
 
     return s;
@@ -107,7 +146,7 @@ export function viewMemory({ state, r, c }) {
 
   let face = "❓";
   if (card.matched || card.revealed) {
-    face = card.id === -1 ? "⭐" : EMOJIS[card.id % EMOJIS.length];
+    face = EMOJIS[card.id % EMOJIS.length];
   }
 
   const bg = card.matched ? "bg-muted text-muted-foreground" : "bg-background";

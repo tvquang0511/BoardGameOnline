@@ -180,6 +180,30 @@ exports.seed = async function (knex) {
         },
       },
       {
+        slug: "memory",
+        name: "Lật thẻ",
+        description: "Memory card matching game",
+        status: "active",
+        default_config: {
+          board: { rows: 6, cols: 6 },
+          time_limit_seconds: 600,
+          allow_save: true,
+          allow_hint: false,
+        },
+      },
+      {
+        slug: "pixel",
+        name: "Pixel Art",
+        description: "Pixel drawing game",
+        status: "active",
+        default_config: {
+          board: { rows: 15, cols: 15 },
+          time_limit_seconds: 1800,
+          allow_save: true,
+          allow_hint: false,
+        },
+      },
+      {
         slug: "candy",
         name: "Candy Rush",
         description: "Candy style match",

@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { HelpCircle, RotateCcw, ArrowLeft, Palette } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatTime(sec) {
   const mm = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -49,7 +55,10 @@ export default function ControlsCard({
               Color
             </Badge>
 
-            <Select value={pixelColorId} onValueChange={(v) => onPixelSetColor?.(v)}>
+            <Select
+              value={pixelColorId}
+              onValueChange={(v) => onPixelSetColor?.(v)}
+            >
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Chọn màu" />
               </SelectTrigger>
@@ -70,17 +79,31 @@ export default function ControlsCard({
 
         <Separator orientation="vertical" className="h-6 mx-1" />
 
-        <Button variant="outline" size="sm" onClick={onResetGame} disabled={mode !== "play"}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onResetGame}
+          disabled={mode !== "play"}
+        >
           <RotateCcw className="w-4 h-4 mr-2" />
           Reset
         </Button>
 
-        <Button variant="outline" size="sm" onClick={onBackToSelect} disabled={mode !== "play"}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onBackToSelect}
+          disabled={mode !== "play"}
+        >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
 
-        <Button variant={helpOn ? "secondary" : "outline"} size="sm" onClick={onToggleHelp}>
+        <Button
+          variant={helpOn ? "secondary" : "outline"}
+          size="sm"
+          onClick={onToggleHelp}
+        >
           <HelpCircle className="w-4 h-4 mr-2" />
           Help (E)
         </Button>
