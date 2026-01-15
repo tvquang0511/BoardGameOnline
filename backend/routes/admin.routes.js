@@ -7,7 +7,9 @@ router.use(requireAuth, requireAdmin);
 
 // user management
 router.get('/users', admin.users);
+router.post('/users', admin.createUser);
 router.patch('/users/:id', admin.updateUser);
+router.delete('/users/:id', admin.deleteUser);
 
 // existing stats endpoint (summary)
 router.get('/stats', admin.stats);

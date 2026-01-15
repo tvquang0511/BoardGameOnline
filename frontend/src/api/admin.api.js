@@ -5,9 +5,17 @@ export const adminApi = {
     // GET /api/admin/users?q=&page=&limit=
     return http.get("/admin/users", { params: { q, page, limit } }).then((r) => r.data);
   },
+  createUser(payload) {
+    // POST /api/admin/users
+    return http.post("/admin/users", payload).then((r) => r.data);
+  },
   updateUser(id, payload) {
     // PATCH /api/admin/users/:id
     return http.patch(`/admin/users/${id}`, payload).then((r) => r.data);
+  },
+  deleteUser(id) {
+    // DELETE /api/admin/users/:id
+    return http.delete(`/admin/users/${id}`).then((r) => r.data);
   },
   stats() {
     // GET /api/admin/stats

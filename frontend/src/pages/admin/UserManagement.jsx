@@ -1,38 +1,85 @@
-import { useEffect, useState } from 'react';
-import AdminLayout from '../../components/AdminLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, UserPlus, Ban, Edit, Trash2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { adminApi } from '../../api/admin.api';
+import { useEffect, useState } from "react";
+import AdminLayout from "../../components/AdminLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Search,
+  MoreVertical,
+  UserPlus,
+  Ban,
+  Edit,
+  Trash2,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { adminApi } from "../../api/admin.api";
 
 export default function UserManagement({ onLogout }) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState([]);
 
-  const load = async (q = '') => {
+  // create dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // edit dialog state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  const load = async (q = "") => {
     const data = await adminApi.users({ q, page: 1, limit: 50 });
     setUsers(data.users || []);
   };
 
   useEffect(() => {
-    load('').catch(() => {
+    load("").catch(() => {
       // TODO(API): error state
     });
   }, []);
 
   const getStatusBadge = (u) => {
-    const status = u.is_enabled ? 'active' : 'inactive';
+    const status = u.is_enabled ? "active" : "inactive";
     switch (status) {
-      case 'active':
+      case "active":
         return <Badge className="bg-green-500">Hoạt động</Badge>;
-      case 'inactive':
+      case "inactive":
         return <Badge variant="secondary">Không hoạt động</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
@@ -44,16 +91,103 @@ export default function UserManagement({ onLogout }) {
     await load(searchQuery);
   };
 
+  const handleCreateUser = async () => {
+    if (!newEmail || !newPassword) {
+      alert("Email và mật khẩu là bắt buộc");
+      return;
+    }
+    setCreating(true);
+    try {
+      await adminApi.createUser({
+        email: newEmail,
+        password: newPassword,
+        display_name: newDisplayName,
+      });
+      // reload list and close
+      await load(searchQuery);
+      setCreateOpen(false);
+      setNewEmail("");
+      setNewPassword("");
+      setNewDisplayName("");
+      alert("Tạo người dùng thành công");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message || err.message || "Lỗi khi tạo người dùng";
+      alert(msg);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Edit flow
+  const openEdit = (u) => {
+    setEditingUser(u);
+    setEditEmail(u.email || "");
+    setEditDisplayName((u.profile && u.profile.display_name) || "");
+    setEditPassword("");
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return;
+    if (!editEmail) {
+      alert("Email không được để trống");
+      return;
+    }
+    setEditing(true);
+    try {
+      const payload = { email: editEmail, display_name: editDisplayName };
+      if (editPassword && editPassword.length > 0)
+        payload.password = editPassword;
+      await adminApi.updateUser(editingUser.id, payload);
+      await load(searchQuery);
+      setEditOpen(false);
+      setEditingUser(null);
+      setEditEmail("");
+      setEditPassword("");
+      setEditDisplayName("");
+      alert("Cập nhật thành công");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err.message ||
+        "Lỗi khi cập nhật người dùng";
+      alert(msg);
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  const handleDelete = async (u) => {
+    const ok = window.confirm(
+      `Bạn có chắc chắn muốn xóa user ${
+        u.email || u.id
+      }? Hành động này không thể hoàn tác.`
+    );
+    if (!ok) return;
+    try {
+      await adminApi.deleteUser(u.id);
+      await load(searchQuery);
+      alert("Xóa thành công");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message || err.message || "Lỗi khi xóa người dùng";
+      alert(msg);
+    }
+  };
+
   return (
     <AdminLayout onLogout={onLogout}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">Quản lý người dùng</h1>
-            <p className="text-gray-600">Quản lý tất cả người dùng trong hệ thống</p>
+            <p className="text-gray-600">
+              Quản lý tất cả người dùng trong hệ thống
+            </p>
           </div>
 
-          <Dialog>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button className="bg-gradient-to-r from-orange-500 to-red-600">
                 <UserPlus className="w-4 h-4 mr-2" />
@@ -64,25 +198,116 @@ export default function UserManagement({ onLogout }) {
               <DialogHeader>
                 <DialogTitle>Thêm người dùng mới</DialogTitle>
                 <DialogDescription>
-                  TODO(API MISSING): Backend chưa có endpoint tạo user từ admin.
+                  Tạo người dùng mới bằng email, mật khẩu và tên hiển thị.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Tên người dùng</Label>
-                  <Input id="name" placeholder="Nhập tên..." />
+                  <Label htmlFor="name">Tên người dùng (hiển thị)</Label>
+                  <Input
+                    id="name"
+                    placeholder="Nhập tên..."
+                    value={newDisplayName}
+                    onChange={(e) => setNewDisplayName(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="email@example.com" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Mật khẩu</Label>
-                  <Input id="password" type="password" placeholder="••••••••" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
                 </div>
-                <Button className="w-full" disabled>
-                  Tạo tài khoản
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    onClick={handleCreateUser}
+                    disabled={creating}
+                  >
+                    {creating ? "Đang tạo..." : "Tạo tài khoản"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setCreateOpen(false)}
+                    disabled={creating}
+                  >
+                    Hủy
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Dialog */}
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Chỉnh sửa người dùng</DialogTitle>
+                <DialogDescription>
+                  Cập nhật email, mật khẩu (nếu muốn đổi) và tên hiển thị.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_name">Tên người dùng (hiển thị)</Label>
+                  <Input
+                    id="edit_name"
+                    placeholder="Nhập tên..."
+                    value={editDisplayName}
+                    onChange={(e) => setEditDisplayName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_email">Email</Label>
+                  <Input
+                    id="edit_email"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_password">
+                    Mật khẩu mới (để trống nếu không đổi)
+                  </Label>
+                  <Input
+                    id="edit_password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    onClick={handleSaveEdit}
+                    disabled={editing}
+                  >
+                    {editing ? "Đang lưu..." : "Lưu"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setEditOpen(false)}
+                    disabled={editing}
+                  >
+                    Hủy
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -93,7 +318,9 @@ export default function UserManagement({ onLogout }) {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Danh sách người dùng</CardTitle>
-                <CardDescription>Tổng số {users.length} người dùng</CardDescription>
+                <CardDescription>
+                  Tổng số {users.length} người dùng
+                </CardDescription>
               </div>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -125,17 +352,24 @@ export default function UserManagement({ onLogout }) {
               </TableHeader>
               <TableBody>
                 {users.map((u) => {
-                  const name = `User #${u.id}`; // TODO(API MISSING): join profiles.username/display_name
-                  const level = 1; // TODO(API MISSING): join profiles.level
-                  const avatarSeed = `user_${u.id}`; // TODO(API MISSING): join profiles.avatar_url
-                  const joinDate = u.created_at ? new Date(u.created_at).toLocaleDateString('vi-VN') : '';
+                  const name =
+                    (u.profile &&
+                      (u.profile.display_name || u.profile.username)) ||
+                    `User #${u.id}`;
+                  const level = 1; // TODO: nếu có field level từ profile hãy hiện
+                  const avatarSeed = `user_${u.id}`;
+                  const joinDate = u.created_at
+                    ? new Date(u.created_at).toLocaleDateString("vi-VN")
+                    : "";
 
                   return (
                     <TableRow key={u.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`} />
+                            <AvatarImage
+                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
+                            />
                             <AvatarFallback>{name[0]}</AvatarFallback>
                           </Avatar>
                           <span className="font-medium">{name}</span>
@@ -155,17 +389,22 @@ export default function UserManagement({ onLogout }) {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(u)}>
                               <Edit className="w-4 h-4 mr-2" />
-                              Chỉnh sửa (TODO)
+                              Chỉnh sửa
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleEnabled(u)}>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleEnabled(u)}
+                            >
                               <Ban className="w-4 h-4 mr-2" />
-                              {u.is_enabled ? 'Khóa tài khoản' : 'Mở khóa'}
+                              {u.is_enabled ? "Khóa tài khoản" : "Mở khóa"}
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleDelete(u)}
+                            >
                               <Trash2 className="w-4 h-4 mr-2" />
-                              Xóa (TODO)
+                              Xóa
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
