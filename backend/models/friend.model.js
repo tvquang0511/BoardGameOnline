@@ -7,10 +7,16 @@ function canonicalPair(a, b) {
   return { user_low_id: low, user_high_id: high };
 }
 
+function paginate({ page = 1, limit = 5 } = {}) {
+  const p = Math.max(parseInt(page, 10) || 1, 1);
+  const l = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 50);
+  const offset = (p - 1) * l;
+  return { page: p, limit: l, offset };
+}
+
 module.exports = {
   canonicalPair,
 
-  // Tìm relationship giữa 2 users
   async findRelationship(user1_id, user2_id) {
     const pair = canonicalPair(user1_id, user2_id);
     return db(TABLE)
@@ -21,11 +27,9 @@ module.exports = {
       .first();
   },
 
-  // Gửi request với kiểm tra logic hợp lý
   async request(requester_id, addressee_id) {
     const pair = canonicalPair(requester_id, addressee_id);
-    
-    // Kiểm tra đã có relationship chưa
+
     const existing = await db(TABLE)
       .where({
         user_low_id: pair.user_low_id,
@@ -33,27 +37,20 @@ module.exports = {
       })
       .first();
 
-    // Nếu đã có relationship
     if (existing) {
-      // Nếu đang pending
       if (existing.status === 'pending') {
-        // Nếu đã là người gửi trước đó
         if (existing.requester_id === requester_id) {
           throw new Error('ALREADY_SENT_REQUEST');
         }
-        // Nếu người kia đã gửi cho mình
         if (existing.addressee_id === requester_id) {
           throw new Error('REQUEST_ALREADY_RECEIVED');
         }
       }
-      
-      // Nếu đã là bạn bè
+
       if (existing.status === 'accepted') {
         throw new Error('ALREADY_FRIENDS');
       }
-      
-      // Nếu đã bị từ chối, có thể gửi lại
-      // Nhưng KHÔNG đảo ngược người gửi/người nhận!
+
       if (existing.status === 'rejected') {
         const [row] = await db(TABLE)
           .where({ id: existing.id })
@@ -68,7 +65,6 @@ module.exports = {
       }
     }
 
-    // Nếu chưa có relationship, tạo mới
     const [row] = await db(TABLE)
       .insert({
         requester_id,
@@ -81,7 +77,65 @@ module.exports = {
     return row;
   },
 
-  // Các hàm còn lại giữ nguyên...
+  // ===== Pagination variants =====
+  async listAcceptedPaginated(user_id, { page = 1, limit = 5 } = {}) {
+    const { offset } = paginate({ page, limit });
+    return db(TABLE)
+      .where({ status: 'accepted' })
+      .andWhere(function () {
+        this.where({ user_low_id: user_id }).orWhere({ user_high_id: user_id });
+      })
+      .orderBy('updated_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  async countAccepted(user_id) {
+    const row = await db(TABLE)
+      .where({ status: 'accepted' })
+      .andWhere(function () {
+        this.where({ user_low_id: user_id }).orWhere({ user_high_id: user_id });
+      })
+      .count('* as c')
+      .first();
+    return Number(row?.c || 0);
+  },
+
+  async listIncomingRequestsPaginated(user_id, { page = 1, limit = 5 } = {}) {
+    const { offset } = paginate({ page, limit });
+    return db(TABLE)
+      .where({ addressee_id: user_id, status: 'pending' })
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  async countIncomingRequests(user_id) {
+    const row = await db(TABLE)
+      .where({ addressee_id: user_id, status: 'pending' })
+      .count('* as c')
+      .first();
+    return Number(row?.c || 0);
+  },
+
+  async listOutgoingRequestsPaginated(user_id, { page = 1, limit = 5 } = {}) {
+    const { offset } = paginate({ page, limit });
+    return db(TABLE)
+      .where({ requester_id: user_id, status: 'pending' })
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  async countOutgoingRequests(user_id) {
+    const row = await db(TABLE)
+      .where({ requester_id: user_id, status: 'pending' })
+      .count('* as c')
+      .first();
+    return Number(row?.c || 0);
+  },
+
+  // ===== Old methods kept if you still use them somewhere else =====
   listAccepted(user_id) {
     return db(TABLE)
       .where({ status: 'accepted' })

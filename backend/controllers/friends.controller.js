@@ -4,8 +4,7 @@ const Profile = require("../models/profile.model");
 const db = require("../db/knex");
 const AchievementService = require("../services/achievement.service");
 
-// Helper để lấy thông tin profile
-async function getFriendProfile(userId, currentUserId) {
+async function getFriendProfile(userId) {
   const profile = await Profile.findByUserId(userId);
   const user = await User.findById(userId);
 
@@ -26,21 +25,40 @@ async function getFriendProfile(userId, currentUserId) {
   };
 }
 
+function parsePaging(req, defaults = { page: 1, limit: 5 }) {
+  const page = Math.max(parseInt(req.query.page || defaults.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit || defaults.limit, 10) || defaults.limit, 1),
+    50
+  );
+  return { page, limit };
+}
+
+function metaFromTotal({ page, limit, total }) {
+  const totalPages = Math.max(Math.ceil(total / limit), 1);
+  return { page, limit, total, totalPages };
+}
+
 exports.list = async (req, res, next) => {
   try {
-    const rows = await Friend.listAccepted(req.user.sub);
+    const { page, limit } = parsePaging(req, { page: 1, limit: 5 });
+
+    const [total, rows] = await Promise.all([
+      Friend.countAccepted(req.user.sub),
+      Friend.listAcceptedPaginated(req.user.sub, { page, limit }),
+    ]);
 
     const friends = await Promise.all(
       rows.map(async (rel) => {
         const friendId =
           rel.user_low_id === req.user.sub ? rel.user_high_id : rel.user_low_id;
-        const friendProfile = await getFriendProfile(friendId, req.user.sub);
 
+        const friendProfile = await getFriendProfile(friendId);
         if (!friendProfile) return null;
 
         return {
-          friendship_id: rel.id, // <-- Đổi tên để rõ ràng
-          user_id: friendProfile.id, // <-- User ID của bạn bè
+          friendship_id: rel.id,
+          user_id: friendProfile.id,
           ...friendProfile,
           status: "accepted",
           created_at: rel.created_at,
@@ -49,10 +67,10 @@ exports.list = async (req, res, next) => {
       })
     );
 
-    // Lọc bỏ null
-    const filteredFriends = friends.filter((f) => f !== null);
-
-    res.json({ friends: filteredFriends });
+    res.json({
+      friends: friends.filter(Boolean),
+      meta: metaFromTotal({ page, limit, total }),
+    });
   } catch (e) {
     next(e);
   }
@@ -60,21 +78,22 @@ exports.list = async (req, res, next) => {
 
 exports.requests = async (req, res, next) => {
   try {
-    const rows = await Friend.listIncomingRequests(req.user.sub);
+    const { page, limit } = parsePaging(req, { page: 1, limit: 5 });
+
+    const [total, rows] = await Promise.all([
+      Friend.countIncomingRequests(req.user.sub),
+      Friend.listIncomingRequestsPaginated(req.user.sub, { page, limit }),
+    ]);
 
     const requests = await Promise.all(
       rows.map(async (rel) => {
-        const requesterProfile = await getFriendProfile(
-          rel.requester_id,
-          req.user.sub
-        );
-
+        const requesterProfile = await getFriendProfile(rel.requester_id);
         if (!requesterProfile) return null;
 
         return {
-          friendship_id: rel.id, // <-- Đổi tên
+          friendship_id: rel.id,
           requester_id: rel.requester_id,
-          user_id: requesterProfile.id, // <-- Thêm user_id
+          user_id: requesterProfile.id,
           ...requesterProfile,
           status: rel.status,
           created_at: rel.created_at,
@@ -83,8 +102,10 @@ exports.requests = async (req, res, next) => {
       })
     );
 
-    const filteredRequests = requests.filter((r) => r !== null);
-    res.json({ requests: filteredRequests });
+    res.json({
+      requests: requests.filter(Boolean),
+      meta: metaFromTotal({ page, limit, total }),
+    });
   } catch (e) {
     next(e);
   }
@@ -92,21 +113,22 @@ exports.requests = async (req, res, next) => {
 
 exports.outgoing = async (req, res, next) => {
   try {
-    const rows = await Friend.listOutgoingRequests(req.user.sub);
+    const { page, limit } = parsePaging(req, { page: 1, limit: 5 });
+
+    const [total, rows] = await Promise.all([
+      Friend.countOutgoingRequests(req.user.sub),
+      Friend.listOutgoingRequestsPaginated(req.user.sub, { page, limit }),
+    ]);
 
     const requests = await Promise.all(
       rows.map(async (rel) => {
-        const addresseeProfile = await getFriendProfile(
-          rel.addressee_id,
-          req.user.sub
-        );
-
+        const addresseeProfile = await getFriendProfile(rel.addressee_id);
         if (!addresseeProfile) return null;
 
         return {
-          friendship_id: rel.id, // <-- Đổi tên
+          friendship_id: rel.id,
           addressee_id: rel.addressee_id,
-          user_id: addresseeProfile.id, // <-- Thêm user_id
+          user_id: addresseeProfile.id,
           ...addresseeProfile,
           status: rel.status,
           created_at: rel.created_at,
@@ -115,8 +137,10 @@ exports.outgoing = async (req, res, next) => {
       })
     );
 
-    const filteredRequests = requests.filter((r) => r !== null);
-    res.json({ requests: filteredRequests });
+    res.json({
+      requests: requests.filter(Boolean),
+      meta: metaFromTotal({ page, limit, total }),
+    });
   } catch (e) {
     next(e);
   }
@@ -165,23 +189,14 @@ exports.request = async (req, res, next) => {
 
 exports.accept = async (req, res, next) => {
   try {
-    const row = await Friend.updateStatus(
-      req.params.id,
-      req.user.sub,
-      "accepted"
-    );
-    if (!row)
-      return res.status(404).json({ message: "Không tìm thấy lời mời" });
+    const row = await Friend.updateStatus(req.params.id, req.user.sub, "accepted");
+    if (!row) return res.status(404).json({ message: "Không tìm thấy lời mời" });
 
-    // Check friend achievements for BOTH users
     const unlockedAchievements = await AchievementService.checkAndUnlock(
       req.user.sub,
-      {
-        type: "friend_accepted",
-      }
+      { type: "friend_accepted" }
     );
 
-    // Also check for the requester
     await AchievementService.checkAndUnlock(row.requester_id, {
       type: "friend_accepted",
     });
@@ -194,13 +209,8 @@ exports.accept = async (req, res, next) => {
 
 exports.reject = async (req, res, next) => {
   try {
-    const row = await Friend.updateStatus(
-      req.params.id,
-      req.user.sub,
-      "rejected"
-    );
-    if (!row)
-      return res.status(404).json({ message: "Không tìm thấy lời mời" });
+    const row = await Friend.updateStatus(req.params.id, req.user.sub, "rejected");
+    if (!row) return res.status(404).json({ message: "Không tìm thấy lời mời" });
     res.json({ friend: row });
   } catch (e) {
     next(e);
@@ -210,8 +220,7 @@ exports.reject = async (req, res, next) => {
 exports.cancel = async (req, res, next) => {
   try {
     const row = await Friend.cancel(req.params.id, req.user.sub);
-    if (!row)
-      return res.status(404).json({ message: "Không tìm thấy lời mời" });
+    if (!row) return res.status(404).json({ message: "Không tìm thấy lời mời" });
     res.json({ friend: row });
   } catch (e) {
     next(e);
@@ -222,9 +231,7 @@ exports.unfriend = async (req, res, next) => {
   try {
     const row = await Friend.unfriend(req.params.id, req.user.sub);
     if (!row)
-      return res
-        .status(404)
-        .json({ message: "Không tìm thấy mối quan hệ bạn bè" });
+      return res.status(404).json({ message: "Không tìm thấy mối quan hệ bạn bè" });
     res.json({ ok: true });
   } catch (e) {
     next(e);
@@ -234,10 +241,9 @@ exports.unfriend = async (req, res, next) => {
 exports.suggestions = async (req, res, next) => {
   try {
     const q = (req.query.q || "").trim();
-    const limit = Math.min(parseInt(req.query.limit || "15", 10) || 15, 50);
+    const { page, limit } = parsePaging(req, { page: 1, limit: 5 });
     const me = req.user.sub;
 
-    // Lấy tất cả user đã có mối quan hệ
     const rels = await db("friends")
       .select("user_low_id", "user_high_id")
       .where(function () {
@@ -250,9 +256,24 @@ exports.suggestions = async (req, res, next) => {
       excluded.add(r.user_high_id);
     });
 
-    // Tìm gợi ý
-    let query = db("profiles")
+    let baseQuery = db("profiles")
       .join("users", "profiles.user_id", "users.id")
+      .whereNotIn("users.id", Array.from(excluded))
+      .andWhere("users.is_enabled", true);
+
+    if (q) {
+      baseQuery = baseQuery.andWhere(function () {
+        this.where("profiles.username", "ilike", `%${q}%`)
+          .orWhere("profiles.display_name", "ilike", `%${q}%`)
+          .orWhere("users.email", "ilike", `%${q}%`);
+      });
+    }
+
+    const [{ c: totalRaw }] = await baseQuery.clone().count("* as c");
+    const total = Number(totalRaw || 0);
+
+    const suggestions = await baseQuery
+      .clone()
       .select(
         "users.id as user_id",
         "users.email",
@@ -264,29 +285,19 @@ exports.suggestions = async (req, res, next) => {
         "profiles.points",
         "profiles.bio"
       )
-      .whereNotIn("users.id", Array.from(excluded))
-      .andWhere("users.is_enabled", true)
-      .andWhere("users.role", "user")
       .orderBy("profiles.points", "desc")
-      .limit(limit);
+      .limit(limit)
+      .offset((page - 1) * limit);
 
-    if (q) {
-      query = query.andWhere(function () {
-        this.where("profiles.username", "ilike", `%${q}%`)
-          .orWhere("profiles.display_name", "ilike", `%${q}%`)
-          .orWhere("users.email", "ilike", `%${q}%`);
-      });
-    }
-
-    const suggestions = await query;
-
-    // Tính số bạn chung (tạm thời để 0)
     const suggestionsWithMutual = suggestions.map((user) => ({
       ...user,
       mutual_friends: 0,
     }));
 
-    res.json({ suggestions: suggestionsWithMutual });
+    res.json({
+      suggestions: suggestionsWithMutual,
+      meta: metaFromTotal({ page, limit, total }),
+    });
   } catch (e) {
     next(e);
   }
