@@ -1,4 +1,5 @@
 const db = require("../db/knex");
+const { calculateLevel } = require("../utils/level");
 
 /**
  * Achievement Service
@@ -196,25 +197,35 @@ class AchievementService {
   }
 
   /**
-   * Award points to user profile
+   * Award points to user profile from achievements
    */
   async _awardPoints(user_id, points) {
-    if (!points || points <= 0) return;
+    // Validate points
+    const validPoints = parseInt(points, 10);
+    if (!validPoints || validPoints <= 0) return;
 
     try {
       const profile = await db("profiles").where({ user_id }).first();
       if (!profile) return;
 
-      const newPoints = (profile.points || 0) + points;
-      const newLevel = Math.floor(1 + Math.sqrt(newPoints / 500)); // Level formula: √(points/500) + 1
+      // Calculate new points and level
+      const currentPoints = parseInt(profile.points, 10) || 0;
+      const newPoints = currentPoints + validPoints;
+      const newLevel = calculateLevel(newPoints);
+      const oldLevel = profile.level || 1;
 
+      // Update profile (level never decreases)
       await db("profiles")
         .where({ user_id })
         .update({
           points: newPoints,
-          level: Math.max(profile.level, newLevel),
+          level: Math.max(oldLevel, newLevel),
           updated_at: db.fn.now(),
         });
+
+      console.log(
+        `[Achievement] User ${user_id}: +${validPoints} points (${currentPoints} → ${newPoints}), Level ${oldLevel} → ${newLevel}`
+      );
     } catch (err) {
       console.error("Award points error:", err);
     }

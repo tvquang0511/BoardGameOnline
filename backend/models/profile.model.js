@@ -1,4 +1,5 @@
 const db = require("../db/knex");
+const { calculateLevel } = require("../utils/level");
 const TABLE = "profiles";
 
 module.exports = {
@@ -104,21 +105,30 @@ module.exports = {
       const profile = await db(TABLE).where({ user_id }).first();
       if (!profile) return null;
 
-      // Points = total score from all games
-      // Convert to number to avoid string concatenation
-      const earnedPoints = parseInt(score, 10) || 0;
+      // Convert score to points (validate: must be non-negative)
+      const earnedPoints = Math.max(0, parseInt(score, 10) || 0);
+      if (earnedPoints === 0) {
+        return {
+          profile,
+          earned_points: 0,
+          old_level: profile.level,
+          new_level: profile.level,
+          level_up: false,
+        };
+      }
 
-      // Update profile
+      // Calculate new points and level
       const currentPoints = parseInt(profile.points, 10) || 0;
       const newPoints = currentPoints + earnedPoints;
-      const newLevel = Math.floor(1 + Math.sqrt(newPoints / 500)); // Level formula: √(points/500) + 1
-      // Level progression: L2=500pts, L3=2000pts, L5=8000pts, L10=40500pts, L25=288000pts
+      const newLevel = calculateLevel(newPoints);
+      const oldLevel = profile.level || 1;
 
+      // Update profile (level never decreases)
       const [updated] = await db(TABLE)
         .where({ user_id })
         .update({
           points: newPoints,
-          level: Math.max(profile.level || 1, newLevel),
+          level: Math.max(oldLevel, newLevel),
           updated_at: db.fn.now(),
         })
         .returning("*");
@@ -126,9 +136,9 @@ module.exports = {
       return {
         profile: updated,
         earned_points: earnedPoints,
-        old_level: profile.level,
+        old_level: oldLevel,
         new_level: updated.level,
-        level_up: updated.level > profile.level,
+        level_up: updated.level > oldLevel,
       };
     } catch (err) {
       console.error("Add game points error:", err);
