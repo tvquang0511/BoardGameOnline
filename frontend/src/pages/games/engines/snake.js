@@ -58,7 +58,9 @@ export function stepSnake(state, action) {
     s.snake.unshift(next);
 
     if (next.r === s.food.r && next.c === s.food.c) {
-      s.score += 10;
+      // use configured winScore if present, fallback to 10 for compatibility
+      const add = s.winScore ?? 10;
+      s.score += add;
       s.food = spawnFood(s.boardSize, s.snake);
     } else {
       s.snake.pop();

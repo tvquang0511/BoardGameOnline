@@ -26,11 +26,13 @@ function findMatches(board, size) {
       const prev = board[idx(size, r, c - 1)];
       if (cur && cur === prev) run += 1;
       else {
-        if (run >= 3) for (let k = 0; k < run; k += 1) matched.add(idx(size, r, c - 1 - k));
+        if (run >= 3)
+          for (let k = 0; k < run; k += 1) matched.add(idx(size, r, c - 1 - k));
         run = 1;
       }
     }
-    if (run >= 3) for (let k = 0; k < run; k += 1) matched.add(idx(size, r, size - 1 - k));
+    if (run >= 3)
+      for (let k = 0; k < run; k += 1) matched.add(idx(size, r, size - 1 - k));
   }
 
   // cols
@@ -41,11 +43,13 @@ function findMatches(board, size) {
       const prev = board[idx(size, r - 1, c)];
       if (cur && cur === prev) run += 1;
       else {
-        if (run >= 3) for (let k = 0; k < run; k += 1) matched.add(idx(size, r - 1 - k, c));
+        if (run >= 3)
+          for (let k = 0; k < run; k += 1) matched.add(idx(size, r - 1 - k, c));
         run = 1;
       }
     }
-    if (run >= 3) for (let k = 0; k < run; k += 1) matched.add(idx(size, size - 1 - k, c));
+    if (run >= 3)
+      for (let k = 0; k < run; k += 1) matched.add(idx(size, size - 1 - k, c));
   }
 
   return matched;
@@ -69,7 +73,10 @@ function collapse(board, size) {
 
 export function createMatch3({ boardSize }) {
   const size = boardSize; // ✅ full board
-  const board = Array.from({ length: size * size }, () => COLORS[randInt(COLORS.length)]);
+  const board = Array.from(
+    { length: size * size },
+    () => COLORS[randInt(COLORS.length)]
+  );
   return { boardSize, size, board, selected: null, score: 0 };
 }
 
@@ -88,7 +95,9 @@ export function stepMatch3(state, action) {
     const b = { r, c };
     s.selected = null;
 
-    const isAdj = neighbors(s.size, a.r, a.c).some((p) => p.r === b.r && p.c === b.c);
+    const isAdj = neighbors(s.size, a.r, a.c).some(
+      (p) => p.r === b.r && p.c === b.c
+    );
     if (!isAdj) return s;
 
     const ia = idx(s.size, a.r, a.c);
@@ -102,6 +111,11 @@ export function stepMatch3(state, action) {
     }
 
     while (matched.size > 0) {
+      // Award winScore once per match event if any match (>=3) occurred
+      if (matched.size >= 3) {
+        s.score += s.winScore || 0;
+      }
+
       matched.forEach((i) => (s.board[i] = null));
       s.score += matched.size * 5;
       s.board = collapse(s.board, s.size);
@@ -119,12 +133,17 @@ export function viewMatch3({ state, r, c }) {
   const v = state.board[idx(state.size, r, c)];
 
   const color =
-    v === "R" ? "bg-red-400" :
-    v === "G" ? "bg-green-400" :
-    v === "B" ? "bg-blue-400" :
-    v === "Y" ? "bg-yellow-400" :
-    "bg-purple-400";
+    v === "R"
+      ? "bg-red-400"
+      : v === "G"
+      ? "bg-green-400"
+      : v === "B"
+      ? "bg-blue-400"
+      : v === "Y"
+      ? "bg-yellow-400"
+      : "bg-purple-400";
 
-  const ring = state.selected && state.selected.r === r && state.selected.c === c;
+  const ring =
+    state.selected && state.selected.r === r && state.selected.c === c;
   return { bgClass: color, text: "", ring, title: v };
 }
