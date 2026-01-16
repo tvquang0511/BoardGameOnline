@@ -44,7 +44,10 @@ export function stepTtt(state, action) {
 
     s.cells[i] = "X";
     s.winner = checkWinner(s.cells);
-    if (s.winner === "X") s.score += 100;
+    if (s.winner === "X") {
+      const add = s.winScore ?? s.win_score ?? 100;
+      s.score += add;
+    }
 
     if (!s.winner) {
       s.turn = "CPU";

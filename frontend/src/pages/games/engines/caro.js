@@ -55,7 +55,11 @@ export function stepCaro(state, action) {
 
     s.board[i] = "X";
     s.winner = checkWinner(s.board, s.boardSize, s.winLen);
-    if (s.winner === "X") s.score += 100;
+    if (s.winner === "X") {
+      // use configured winScore if present (camelCase or underscore)
+      const add = s.winScore ?? s.win_score ?? 100;
+      s.score += add;
+    }
 
     if (!s.winner) {
       s.turn = "CPU";

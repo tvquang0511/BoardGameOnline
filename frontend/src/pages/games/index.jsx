@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { sessionsApi } from "@/api/sessions.api";
 import { savedGamesApi } from "@/api/savedGames.api";
+import { gamesApi } from "@/api/games.api";
 import { attachInput } from "./input";
 import { wrap } from "./utils";
 
@@ -66,6 +67,26 @@ function reducer(state, action) {
   if (action.type === "SET_MODE") {
     s.mode = action.mode;
     s.activeGameId = action.activeGameId ?? null;
+    // allow updating root boardSize when switching mode (so Board grid uses correct size)
+    if (typeof action.boardSize === "number") {
+      s.boardSize = action.boardSize;
+      // also adjust cursor to center of new board
+      s.cursor = {
+        r: Math.floor(s.boardSize / 2),
+        c: Math.floor(s.boardSize / 2),
+      };
+    }
+    return s;
+  }
+
+  if (action.type === "SET_BOARD_SIZE") {
+    if (typeof action.boardSize === "number") {
+      s.boardSize = action.boardSize;
+      s.cursor = {
+        r: Math.floor(s.boardSize / 2),
+        c: Math.floor(s.boardSize / 2),
+      };
+    }
     return s;
   }
 
@@ -108,8 +129,8 @@ function reducer(state, action) {
 
 export default function GamesPage({ onLogout }) {
   const { user } = useAuth();
-  const BOARD_SIZE = 15;
-  const [state, dispatch] = useReducer(reducer, BOARD_SIZE, initState);
+  const DEFAULT_BOARD_SIZE = 15;
+  const [state, dispatch] = useReducer(reducer, DEFAULT_BOARD_SIZE, initState);
 
   const selectCells = useMemo(
     () => buildSelectCells(state.boardSize),
@@ -125,34 +146,59 @@ export default function GamesPage({ onLogout }) {
   const [pendingGameId, setPendingGameId] = useState(null);
   const [autoSaveData, setAutoSaveData] = useState(null);
 
+  // Winner detection: prefer engine-provided winner, otherwise check configured winScore for score-based games
   const winner = (() => {
     const id = state.activeGameId;
+    if (!id) return null;
+
+    // Engine-provided winners
     if (id === "caro4") return state.caro4.winner;
     if (id === "caro5") return state.caro5.winner;
     if (id === "tictactoe") return state.tictactoe.winner;
+
+    // Memory uses done flag
     if (id === "memory") {
-      const result = state.memory.done ? "WIN" : null;
-      if (result)
-        console.log(
-          "🏆 Memory winner detected:",
-          result,
-          "done:",
-          state.memory.done
-        );
-      return result;
+      return state.memory.done ? "WIN" : null;
     }
-    if (id === "snake") return state.snake.dead ? "LOSE" : null;
-    if (id === "match3") return state.match3.score >= 1000 ? "WIN" : null;
-    if (id === "pixel") return state.pixel.score >= 500 ? "WIN" : null;
+
+    // Snake: death => LOSE; also allow win by reaching configured winScore
+    if (id === "snake") {
+      if (state.snake.dead) return "LOSE";
+      if (
+        typeof state.snake.winScore === "number" &&
+        state.snake.score >= state.snake.winScore
+      )
+        return "WIN";
+      return null;
+    }
+
+    // Score-based games (match3, pixel): use configured winScore if present
+    if (id === "match3") {
+      if (
+        typeof state.match3.winScore === "number" &&
+        state.match3.score >= state.match3.winScore
+      )
+        return "WIN";
+      return null;
+    }
+    if (id === "pixel") {
+      if (
+        typeof state.pixel.winScore === "number" &&
+        state.pixel.score >= state.pixel.winScore
+      )
+        return "WIN";
+      return null;
+    }
+
     return null;
   })();
 
-  // Timer only runs in play mode and game not finished
+  // Timer only runs in play mode and game not finished or sessionFinished
   useEffect(() => {
-    if (state.mode !== "play" || winner) return;
+    if (state.mode !== "play" || winner || sessionFinished) return;
     const t = setInterval(() => setTimeSeconds((p) => p + 1), 1000);
     return () => clearInterval(t);
-  }, [state.mode, winner]);
+  }, [state.mode, winner, sessionFinished]);
 
   useEffect(() => {
     if (state.mode !== "play" || state.activeGameId !== "snake") return;
@@ -279,6 +325,95 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner, sessionId, sessionFinished]);
 
+  // Time limit watcher: finish game when exceeding configured time_limit_seconds
+  useEffect(() => {
+    if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
+
+    const gs = state[state.activeGameId];
+    const limit = gs?.timeLimitSeconds ?? gs?.time_limit_seconds ?? null;
+    if (!limit) return;
+    if (timeSeconds < limit) return;
+
+    const handleTimeUp = async () => {
+      try {
+        // mark result as lose on timeout
+        setGameResult("lose");
+        // finish session if exists
+        if (sessionId) {
+          try {
+            const response = await sessionsApi.finish(sessionId, {
+              result: "lose",
+              score,
+              duration_seconds: timeSeconds,
+            });
+            console.log(
+              "⏱️ Session finished due to timeout:",
+              response.session.id
+            );
+          } catch (err) {
+            console.error("Failed to finish session on timeout:", err);
+          }
+        }
+        setSessionFinished(true);
+      } catch (err) {
+        console.error("Time up handling error:", err);
+      }
+    };
+
+    handleTimeUp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeSeconds, state.mode, state.activeGameId, sessionId, sessionFinished]);
+
+  // Helper: build initial game state from DB default_config
+  const buildInitialGameState = (gameId, defaultConfig = {}) => {
+    const cols = defaultConfig?.board?.cols ?? state.boardSize;
+    const rows = defaultConfig?.board?.rows ?? state.boardSize;
+    const boardSize = Math.max(cols, rows) || state.boardSize;
+    const timeLimitSeconds =
+      defaultConfig?.time_limit_seconds ??
+      defaultConfig?.timeLimitSeconds ??
+      null;
+    const winScore = defaultConfig?.win_score ?? defaultConfig?.winScore ?? 0;
+
+    let init = null;
+    if (gameId === "caro4") {
+      init = createCaro({ boardSize, winLen: 4 });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "caro5") {
+      init = createCaro({ boardSize, winLen: 5 });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "tictactoe") {
+      init = createTtt({ boardSize });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "snake") {
+      init = createSnake({ boardSize });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "match3") {
+      init = createMatch3({ boardSize });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "memory") {
+      init = createMemory({ boardSize });
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else if (gameId === "pixel") {
+      init = createPixel({ boardSize });
+      // add paintedCount to track painted cells
+      init.paintedCount = 0;
+      init.winScore = winScore;
+      init.timeLimitSeconds = timeLimitSeconds;
+    } else {
+      // fallback: try default creators if any
+      init = { boardSize, winScore, timeLimitSeconds };
+    }
+
+    return { init, boardSize };
+  };
+
   const onSelect = async () => {
     const { r, c } = state.cursor;
 
@@ -286,29 +421,68 @@ export default function GamesPage({ onLogout }) {
       const cell = findSelectCell(selectCells, r, c);
       if (!cell) return;
 
-      // Check for auto-save
+      // Fetch game metadata from the server (status + default_config)
       try {
-        const { saved } = await savedGamesApi.list({ gameSlug: cell.gameId });
-        const autoSave = saved.find((s) => s.name === "__autosave__");
-
-        if (autoSave) {
-          // Found auto-save, ask user
-          setPendingGameId(cell.gameId);
-          setAutoSaveData(autoSave);
-          setShowContinueDialog(true);
+        const gameMeta = await gamesApi.getBySlug(cell.gameId);
+        if (!gameMeta) {
+          alert("Không tìm thấy game.");
           return;
         }
-      } catch (error) {
-        console.error("Failed to check auto-save:", error);
-      }
+        // The API returns object with `game` key (as in your console screenshot)
+        const gm = gameMeta.game ?? gameMeta;
+        if (gm.status !== "active") {
+          alert("Game này hiện không thể chơi (inactive).");
+          return;
+        }
+        const defaultConfig = gm.default_config || {};
 
-      // No auto-save, start fresh
-      dispatch({ type: "SET_MODE", mode: "play", activeGameId: cell.gameId });
-      setTimeSeconds(0);
-      setSessionId(null);
-      setSessionFinished(false);
-      setGameResult(null);
-      return;
+        // Prepare initial state from config
+        const { init: initialState, boardSize } = buildInitialGameState(
+          cell.gameId,
+          defaultConfig
+        );
+
+        // Check for auto-save
+        try {
+          const { saved } = await savedGamesApi.list({ gameSlug: cell.gameId });
+          const autoSave = saved.find((s) => s.name === "__autosave__");
+
+          if (autoSave) {
+            // Found auto-save, ask user
+            setPendingGameId(cell.gameId);
+            setAutoSaveData(autoSave);
+            // show dialog; when starting fresh we'll re-fetch meta and set state (handleStartFresh)
+            setShowContinueDialog(true);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to check auto-save:", error);
+        }
+
+        // No auto-save, start fresh with initialState
+        dispatch({
+          type: "SET_MODE",
+          mode: "play",
+          activeGameId: cell.gameId,
+          boardSize,
+        });
+        // restore the newly created initial state so engines get correct boardSize/winScore/timeLimit
+        dispatch({
+          type: "GAME",
+          gameId: cell.gameId,
+          gameAction: { type: "RESTORE_STATE", state: initialState },
+        });
+
+        setTimeSeconds(0);
+        setSessionId(null);
+        setSessionFinished(false);
+        setGameResult(null);
+        return;
+      } catch (error) {
+        console.error("Failed to load game metadata:", error);
+        alert("Không thể khởi động game lúc này.");
+        return;
+      }
     }
 
     const id = state.activeGameId;
@@ -351,6 +525,8 @@ export default function GamesPage({ onLogout }) {
       }
 
       dispatch({ type: "RESET_GAME" }); // Reset game state to clear winner
+      // Reset root board size back to default when exiting play
+      dispatch({ type: "SET_BOARD_SIZE", boardSize: DEFAULT_BOARD_SIZE });
       dispatch({ type: "SET_MODE", mode: "select", activeGameId: null });
       setTimeSeconds(0);
       setSessionId(null);
@@ -384,6 +560,9 @@ export default function GamesPage({ onLogout }) {
       }
     }
 
+    // ignore movement if session finished/time up
+    if (sessionFinished) return;
+
     dispatch({ type: "MOVE", dir: a });
   };
 
@@ -397,13 +576,59 @@ export default function GamesPage({ onLogout }) {
       const { saved } = await savedGamesApi.getById(autoSaveData.id);
       console.log("🔄 Loading saved game:", pendingGameId, saved.data);
       // Start game with loaded state
-      dispatch({ type: "SET_MODE", mode: "play", activeGameId: pendingGameId });
+      const restored = saved.data.gameState;
+
+      // Re-fetch default_config to ensure we apply admin-configured win_score/time_limit/board
+      const gmResp = await gamesApi.getBySlug(pendingGameId);
+      const gm = gmResp.game ?? gmResp;
+      const defaultConfig = gm?.default_config ?? {};
+
+      // Merge defaults: prefer admin default_config when provided, otherwise keep restored values
+      const cols =
+        defaultConfig?.board?.cols ??
+        restored?.boardSize ??
+        restored?.size ??
+        DEFAULT_BOARD_SIZE;
+      const rows =
+        defaultConfig?.board?.rows ??
+        restored?.boardSize ??
+        restored?.size ??
+        DEFAULT_BOARD_SIZE;
+      const boardSize = Math.max(cols, rows);
+      const timeLimitSeconds =
+        defaultConfig?.time_limit_seconds ??
+        defaultConfig?.timeLimitSeconds ??
+        restored?.timeLimitSeconds ??
+        restored?.time_limit_seconds ??
+        null;
+      const winScore =
+        defaultConfig?.win_score ??
+        defaultConfig?.winScore ??
+        restored?.winScore ??
+        restored?.win_score ??
+        0;
+
+      const merged = {
+        ...restored,
+        boardSize,
+        winScore,
+        timeLimitSeconds,
+      };
+
+      // Start with merged boardSize at root and restore merged state
+      dispatch({
+        type: "SET_MODE",
+        mode: "play",
+        activeGameId: pendingGameId,
+        boardSize,
+      });
       dispatch({
         type: "GAME",
         gameId: pendingGameId,
-        gameAction: { type: "RESTORE_STATE", state: saved.data.gameState },
+        gameAction: { type: "RESTORE_STATE", state: merged },
       });
-      console.log("✅ State restored for", pendingGameId);
+
+      console.log("✅ State restored for", pendingGameId, merged);
       setTimeSeconds(saved.data.timeSeconds || 0);
       setSessionId(null);
       setSessionFinished(false);
@@ -423,8 +648,36 @@ export default function GamesPage({ onLogout }) {
       if (autoSaveData) {
         await savedGamesApi.remove(autoSaveData.id);
       }
-      // Start fresh game
-      dispatch({ type: "SET_MODE", mode: "play", activeGameId: pendingGameId });
+      // Re-fetch game meta to build initial state according to DB config
+      if (pendingGameId) {
+        try {
+          const gmResp = await gamesApi.getBySlug(pendingGameId);
+          const gm = gmResp.game ?? gmResp;
+          if (!gm || gm.status !== "active") {
+            alert("Game không khả dụng.");
+            setShowContinueDialog(false);
+            return;
+          }
+          const { init: initialState, boardSize } = buildInitialGameState(
+            pendingGameId,
+            gm.default_config || {}
+          );
+          dispatch({
+            type: "SET_MODE",
+            mode: "play",
+            activeGameId: pendingGameId,
+            boardSize,
+          });
+          dispatch({
+            type: "GAME",
+            gameId: pendingGameId,
+            gameAction: { type: "RESTORE_STATE", state: initialState },
+          });
+        } catch (err) {
+          console.error("Failed to fetch game meta for fresh start:", err);
+        }
+      }
+
       setTimeSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
@@ -434,6 +687,20 @@ export default function GamesPage({ onLogout }) {
       console.error("Failed to delete auto-save:", error);
     }
   };
+
+  // derive active game UI values (winScore, timeLimit and remaining)
+  // derive active game UI values (winScore, timeLimit and remaining)
+  const activeGameState = state.activeGameId ? state[state.activeGameId] : null;
+  // prefer camelCase (timeLimitSeconds / winScore) then fallback to underscore names
+  const activeTimeLimit =
+    activeGameState?.timeLimitSeconds ??
+    activeGameState?.time_limit_seconds ??
+    null;
+  const activeWinScore =
+    activeGameState?.winScore ?? activeGameState?.win_score ?? null;
+  const remainingSeconds = activeTimeLimit
+    ? Math.max(0, activeTimeLimit - timeSeconds)
+    : null;
 
   const getCellView = (r, c) => {
     if (state.mode === "select") {
@@ -480,6 +747,10 @@ export default function GamesPage({ onLogout }) {
           gameName={activeConfig?.name || ""}
           score={score}
           timeSeconds={timeSeconds}
+          // new props for UI
+          timeLimitSeconds={activeTimeLimit}
+          remainingSeconds={remainingSeconds}
+          winScore={activeWinScore}
           onResetGame={() => {
             dispatch({ type: "RESET_GAME" });
             setTimeSeconds(0);

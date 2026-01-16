@@ -57,3 +57,6 @@ module.exports = {
     return rows.map((r) => ({ hour: parseInt(r.hour, 10), count: parseInt(r.count, 10) }));
   },
 };
+
+
+ 
