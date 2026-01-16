@@ -26,6 +26,7 @@ export function createPixel({ boardSize }) {
     colorId: "blue",
     score: 0,
     paintedCount: 0, // count of unique painted cells
+    done: false,
   };
 }
 
@@ -47,12 +48,18 @@ export function stepPixel(state, action) {
       s.score += 1;
       // Every 20 unique painted cells award winScore (if configured)
       if (s.paintedCount % 20 === 0) {
-        s.score += (s.winScore || 0);
+        s.score += (s.winScore ?? s.win_score ?? 0);
       }
     } else {
       // If re-painting an already painted cell, just change color (no score)
       s.pixels[i] = s.colorId;
     }
+
+    // if all painted -> done
+    if (s.paintedCount >= s.boardSize * s.boardSize) {
+      s.done = true;
+    }
+
     return s;
   }
 

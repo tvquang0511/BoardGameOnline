@@ -35,10 +35,9 @@ export function createMemory({ boardSize }) {
   const size = 4;
   const total = size * size;
 
-  // 18 pairs
-  const pairs = total / 2; // 18
+  const pairs = total / 2;
   const base = Array.from({ length: pairs }, (_, i) => i);
-  const ids = shuffle([...base, ...base]); // Perfect pairs
+  const ids = shuffle([...base, ...base]);
 
   const deck = ids.map((id) => ({
     id,
@@ -80,7 +79,6 @@ export function stepMemory(state, action) {
     if (s.done) return s;
     if (s.lock) return s;
 
-    // đặt board memory ở giữa
     const start = Math.floor((s.boardSize - s.size) / 2);
     const rr = action.r - start;
     const cc = action.c - start;
@@ -98,7 +96,6 @@ export function stepMemory(state, action) {
       const a = s.deck[x];
       const b = s.deck[y];
 
-      // Check if cards match
       const isMatch = a.id === b.id;
 
       if (isMatch) {
@@ -108,20 +105,11 @@ export function stepMemory(state, action) {
         s.opened = [];
         s.lock = false;
 
-        // Check if all cards are matched
         const allMatched = s.deck.every((c) => c.matched);
-        console.log(
-          "Memory check done:",
-          allMatched,
-          "matched cards:",
-          s.deck.filter((c) => c.matched).length,
-          "total:",
-          s.deck.length
-        );
         if (allMatched) {
           s.done = true;
-          s.score += 50;
-          console.log("🎉 Memory game completed! done =", s.done);
+          // award configured win_score on complete
+          s.score += (s.winScore ?? s.win_score ?? 0);
         }
       } else {
         s.lock = true;

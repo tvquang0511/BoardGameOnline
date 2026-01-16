@@ -11,12 +11,15 @@ function neighbors(size, r, c) {
   if (c - 1 >= 0) res.push({ r, c: c - 1 });
   if (c + 1 < size) res.push({ r, c: c + 1 });
   if (r - 1 >= 0) res.push({ r: r - 1, c });
+  // if (r + 1 < size) res.push({ r, c: c, r: r + 1 });
   if (r + 1 < size) res.push({ r: r + 1, c });
   return res;
 }
 
-function findMatches(board, size) {
+// returns { matched:Set, lines: number }
+function findMatchesWithLines(board, size) {
   const matched = new Set();
+  let lines = 0;
 
   // rows
   for (let r = 0; r < size; r += 1) {
@@ -26,13 +29,17 @@ function findMatches(board, size) {
       const prev = board[idx(size, r, c - 1)];
       if (cur && cur === prev) run += 1;
       else {
-        if (run >= 3)
+        if (run >= 3) {
+          lines += 1;
           for (let k = 0; k < run; k += 1) matched.add(idx(size, r, c - 1 - k));
+        }
         run = 1;
       }
     }
-    if (run >= 3)
+    if (run >= 3) {
+      lines += 1;
       for (let k = 0; k < run; k += 1) matched.add(idx(size, r, size - 1 - k));
+    }
   }
 
   // cols
@@ -43,16 +50,20 @@ function findMatches(board, size) {
       const prev = board[idx(size, r - 1, c)];
       if (cur && cur === prev) run += 1;
       else {
-        if (run >= 3)
+        if (run >= 3) {
+          lines += 1;
           for (let k = 0; k < run; k += 1) matched.add(idx(size, r - 1 - k, c));
+        }
         run = 1;
       }
     }
-    if (run >= 3)
+    if (run >= 3) {
+      lines += 1;
       for (let k = 0; k < run; k += 1) matched.add(idx(size, size - 1 - k, c));
+    }
   }
 
-  return matched;
+  return { matched, lines };
 }
 
 function collapse(board, size) {
@@ -72,12 +83,12 @@ function collapse(board, size) {
 }
 
 export function createMatch3({ boardSize }) {
-  const size = boardSize; // ✅ full board
+  const size = boardSize; // full board
   const board = Array.from(
     { length: size * size },
     () => COLORS[randInt(COLORS.length)]
   );
-  return { boardSize, size, board, selected: null, score: 0 };
+  return { boardSize, size, board, selected: null, score: 0, done: false };
 }
 
 export function stepMatch3(state, action) {
@@ -104,22 +115,23 @@ export function stepMatch3(state, action) {
     const ib = idx(s.size, b.r, b.c);
     [s.board[ia], s.board[ib]] = [s.board[ib], s.board[ia]];
 
-    let matched = findMatches(s.board, s.size);
-    if (matched.size === 0) {
+    let res = findMatchesWithLines(s.board, s.size);
+    if (res.matched.size === 0) {
       [s.board[ia], s.board[ib]] = [s.board[ib], s.board[ia]];
       return s;
     }
 
-    while (matched.size > 0) {
-      // Award winScore once per match event if any match (>=3) occurred
-      if (matched.size >= 3) {
-        s.score += s.winScore || 0;
+    while (res.matched.size > 0) {
+      // Award winScore per matched line
+      if (res.lines >= 1) {
+        s.score += (s.winScore ?? s.win_score ?? 0) * res.lines;
       }
 
-      matched.forEach((i) => (s.board[i] = null));
-      s.score += matched.size * 5;
+      // base points per matched cell
+      s.score += res.matched.size * 5;
+      res.matched.forEach((i) => (s.board[i] = null));
       s.board = collapse(s.board, s.size);
-      matched = findMatches(s.board, s.size);
+      res = findMatchesWithLines(s.board, s.size);
     }
 
     return s;
