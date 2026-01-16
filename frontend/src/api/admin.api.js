@@ -46,12 +46,16 @@ export const adminApi = {
     return http.get("/admin/statistics/game-distribution").then((r) => r.data);
   },
   userGrowth(months = 6) {
-    // GET /api/admin/statistics/user-growth?months=
     return http
       .get("/admin/statistics/user-growth", { params: { months } })
       .then((r) => r.data);
   },
   updateGame(id, payload) {
     return http.patch(`/admin/games/${id}`, payload).then((r) => r.data);
+  },
+  recentActivity({ q = "", limit = 20, type = "all" } = {}) {
+    return http
+      .get("/admin/activity", { params: { q, limit, type } })
+      .then((r) => r.data);
   },
 };

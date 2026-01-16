@@ -148,7 +148,11 @@ export default function UserManagement({ onLogout }) {
       case "active":
         return <Badge className="bg-green-500">Hoạt động</Badge>;
       case "inactive":
-        return <Badge variant="secondary">Không hoạt động</Badge>;
+        return (
+          <Badge variant="secondary" className="bg-red-500">
+            Bị khóa
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -418,14 +422,19 @@ export default function UserManagement({ onLogout }) {
               </TableHeader>
               <TableBody>
                 {users.map((u) => {
+                  console.log("user", u);
                   const name =
                     (u.profile &&
                       (u.profile.display_name || u.profile.username)) ||
                     `User #${u.id}`;
-                  const level = 1; // TODO: nếu có field level từ profile hãy hiện
+                  const level = u.profile ? u.profile.level : 1; // TODO: nếu có field level từ profile hãy hiện
                   const avatarSeed = `user_${u.id}`;
                   const joinDate = u.created_at
-                    ? new Date(u.created_at).toLocaleDateString("vi-VN")
+                    ? new Date(u.created_at).toLocaleDateString("vi-VN", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })
                     : "";
 
                   return (

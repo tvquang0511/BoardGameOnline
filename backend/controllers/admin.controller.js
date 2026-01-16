@@ -205,3 +205,139 @@ exports.stats = async (req, res, next) => {
     next(e);
   }
 };
+
+exports.getRecentActivity = async (req, res, next) => {
+  try {
+    const {
+      q: searchQuery = "",
+      page = 1,
+      limit = 50,
+      type = "all", // "all", "auth", "game"
+    } = req.query;
+    const offset = (page - 1) * limit;
+    let baseQuery = db
+      .select(
+        "a.id",
+        "a.user_id",
+        "a.started_at",
+        "a.ended_at",
+        "a.type",
+        "a.game_id",
+        "a.game_name",
+        "a.mode",
+        "a.status",
+        "a.score",
+        "a.duration_seconds",
+        "a.ip",
+        "a.user_agent",
+        "a.state"
+      )
+      .from(
+        db
+          .select(
+            "id",
+            "user_id",
+            "started_at",
+            "ended_at",
+            db.raw("'auth' as type"),
+            db.raw("null as game_id"),
+            db.raw("null as game_name"),
+            db.raw("null as mode"),
+            db.raw("null as status"),
+            db.raw("null as score"),
+            db.raw("null as duration_seconds"),
+            "ip",
+            "user_agent",
+            db.raw("null as state")
+          )
+          .from("auth_sessions")
+          .unionAll(
+            db
+              .select(
+                "sessions.id",
+                "sessions.user_id",
+                "sessions.started_at",
+                "sessions.ended_at",
+                db.raw("'game' as type"),
+                "sessions.game_id",
+                "games.name as game_name",
+                "sessions.mode",
+                "sessions.status",
+                "sessions.score",
+                "sessions.duration_seconds",
+                db.raw("null as ip"),
+                db.raw("null as user_agent"),
+                "sessions.state"
+              )
+              .from("sessions")
+              .leftJoin("games", "sessions.game_id", "games.id")
+          )
+          .as("a")
+      )
+      .leftJoin("users", "a.user_id", "users.id");
+    if (searchQuery) {
+      baseQuery.where(function () {
+        this.where("users.email", "ilike", `%${searchQuery}%`).orWhere(
+          "a.game_name",
+          "ilike",
+          `%${searchQuery}%`
+        );
+      });
+    }
+    if (type !== "all") {
+      baseQuery.where("a.type", type);
+    }
+
+    const countResult = await db
+      .count("* as total")
+      .from(baseQuery.clone().as("count_query"))
+      .first();
+
+    const total = Number(countResult.total);
+    const activities = await baseQuery
+      .orderBy("a.started_at", "desc")
+      .limit(limit)
+      .offset(offset);
+    const enrichedActivities = activities.map((activity) => ({
+      ...activity,
+      user: activity.user_id
+        ? {
+            id: activity.user_id,
+            email: activity.email,
+            username: activity.username,
+          }
+        : null,
+      duration_formatted:
+        activity.type === "game" && activity.duration_seconds
+          ? formatDuration(activity.duration_seconds)
+          : null,
+    }));
+
+    res.json({
+      activities: enrichedActivities,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+function formatDuration(seconds) {
+  if (!seconds) return "0s";
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+
+  return parts.join(" ");
+}
