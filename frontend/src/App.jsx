@@ -1,8 +1,9 @@
-import React from 'react';
-import { BrowserRouter, useNavigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import AppRoutes from './routes/AppRoutes';
-import { authApi } from './api/auth.api';
+import React from "react";
+import { BrowserRouter, useNavigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./components/ui/toast-provider";
+import AppRoutes from "./routes/AppRoutes";
+import { authApi } from "./api/auth.api";
 
 function AppInner() {
   const auth = useAuth();
@@ -15,7 +16,7 @@ function AppInner() {
       // ignore
     } finally {
       auth.logout();
-      navigate('/login');
+      navigate("/login");
     }
   };
 
@@ -25,9 +26,11 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppInner />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppInner />
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

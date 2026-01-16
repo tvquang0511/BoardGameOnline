@@ -1,18 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Layout from '../../components/Layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Calendar, Edit, Mail, User, FileText, Trophy, Star, Target, Zap } from 'lucide-react';
-import { authApi } from '../../api/auth.api';
-import { profilesApi } from '../../api/profiles.api';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Layout from "../../components/Layout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  Calendar,
+  Edit,
+  Mail,
+  User,
+  FileText,
+  Trophy,
+  Star,
+  Target,
+  Zap,
+} from "lucide-react";
+import { authApi } from "../../api/auth.api";
+import { profilesApi } from "../../api/profiles.api";
 
 export default function Profile({ onLogout }) {
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [stats, setStats] = useState(null);
+  const [topAchievements, setTopAchievements] = useState([]);
+  const [favoriteGames, setFavoriteGames] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,20 +38,27 @@ export default function Profile({ onLogout }) {
     (async () => {
       try {
         setLoading(true);
-        const [meData, statsData] = await Promise.all([
-          authApi.me(),
-          profilesApi.myStats()
-        ]);
+        const [meData, statsData, achievementsData, gamesData] =
+          await Promise.all([
+            authApi.me(),
+            profilesApi.myStats(),
+            profilesApi.topAchievements(4),
+            profilesApi.favoriteGames(4),
+          ]);
         if (!mounted) return;
         setMe(meData);
         setStats(statsData.stats);
+        setTopAchievements(achievementsData.achievements || []);
+        setFavoriteGames(gamesData.games || []);
       } catch (error) {
-        console.error('Lỗi khi tải dữ liệu profile:', error);
+        console.error("Lỗi khi tải dữ liệu profile:", error);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const statsCards = useMemo(() => {
@@ -43,10 +68,14 @@ export default function Profile({ onLogout }) {
     const best_score = stats?.best_score ?? 0;
 
     return [
-      { label: 'Tổng trận', value: String(total_games), icon: Target },
-      { label: 'Thắng', value: String(wins), icon: Trophy },
-      { label: 'Tỷ lệ thắng', value: `${win_rate}%`, icon: Star },
-      { label: 'Điểm cao nhất', value: best_score.toLocaleString('vi-VN'), icon: Zap },
+      { label: "Tổng trận", value: String(total_games), icon: Target },
+      { label: "Thắng", value: String(wins), icon: Trophy },
+      { label: "Tỷ lệ thắng", value: `${win_rate}%`, icon: Star },
+      {
+        label: "Điểm cao nhất",
+        value: best_score.toLocaleString("vi-VN"),
+        icon: Zap,
+      },
     ];
   }, [stats]);
 
@@ -60,21 +89,28 @@ export default function Profile({ onLogout }) {
     );
   }
 
-  const displayName = me?.profile?.display_name || me?.profile?.username || 'User';
-  const username = me?.profile?.username || '';
-  const email = me?.user?.email || '';
-  const bio = me?.profile?.bio || 'Chưa có giới thiệu';
-  const avatar = me?.profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username || email)}`;
+  const displayName =
+    me?.profile?.display_name || me?.profile?.username || "User";
+  const username = me?.profile?.username || "";
+  const email = me?.user?.email || "";
+  const bio = me?.profile?.bio || "Chưa có giới thiệu";
+  const avatar =
+    me?.profile?.avatar_url ||
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+      username || email
+    )}`;
   const level = me?.profile?.level ?? 1;
   const points = me?.profile?.points ?? 0;
-  const createdAt = me?.user?.created_at ? new Date(me.user.created_at).toLocaleDateString('vi-VN') : '...';
+  const createdAt = me?.user?.created_at
+    ? new Date(me.user.created_at).toLocaleDateString("vi-VN")
+    : "...";
 
   return (
     <Layout onLogout={onLogout}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-4xl font-bold">Hồ sơ cá nhân</h1>
-          <Button onClick={() => navigate('/profile/edit')}>
+          <Button onClick={() => navigate("/profile/edit")}>
             <Edit className="w-4 h-4 mr-2" />
             Chỉnh sửa hồ sơ
           </Button>
@@ -89,15 +125,20 @@ export default function Profile({ onLogout }) {
                   <Avatar className="w-40 h-40 border-4 border-white shadow-lg">
                     <AvatarImage src={avatar} />
                     <AvatarFallback className="text-4xl">
-                      {displayName?.[0]?.toUpperCase() || 'U'}
+                      {displayName?.[0]?.toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
                 </div>
                 <div className="mt-4 text-center">
-                  <Badge variant="default" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                  <Badge
+                    variant="default"
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                  >
                     Level {level}
                   </Badge>
-                  <div className="mt-2 text-sm text-gray-500">Điểm: {points.toLocaleString('vi-VN')}</div>
+                  <div className="mt-2 text-sm text-gray-500">
+                    Điểm: {points.toLocaleString("vi-VN")}
+                  </div>
                 </div>
               </div>
 
@@ -187,21 +228,40 @@ export default function Profile({ onLogout }) {
               <CardDescription>Các huy hiệu bạn đã đạt được</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { name: 'First Win', icon: '🏆', color: 'bg-yellow-500' },
-                  { name: 'Win Streak 5', icon: '🔥', color: 'bg-orange-500' },
-                  { name: 'Master Player', icon: '👑', color: 'bg-purple-500' },
-                  { name: 'Speed Demon', icon: '⚡', color: 'bg-blue-500' },
-                ].map((achievement) => (
-                  <div key={achievement.name} className="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
-                    <div className={`w-16 h-16 ${achievement.color} rounded-full flex items-center justify-center text-3xl mb-2`}>
-                      {achievement.icon}
-                    </div>
-                    <span className="text-sm font-medium text-center">{achievement.name}</span>
-                  </div>
-                ))}
-              </div>
+              {topAchievements.length > 0 ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {topAchievements.map((achievement) => {
+                    // Use icon and color directly from database
+                    const displayIcon = achievement.icon || "🎯";
+                    const colorClass = achievement.color
+                      ? `bg-gradient-to-br ${achievement.color}`
+                      : "bg-gradient-to-br from-gray-500 to-gray-600";
+
+                    return (
+                      <div
+                        key={achievement.id}
+                        className="flex flex-col items-center p-4 bg-gray-50 rounded-lg"
+                      >
+                        <div
+                          className={`w-16 h-16 ${colorClass} rounded-full flex items-center justify-center text-3xl mb-2 shadow-lg`}
+                        >
+                          {displayIcon}
+                        </div>
+                        <span className="text-sm font-medium text-center">
+                          {achievement.name}
+                        </span>
+                        <span className="text-xs text-gray-500 mt-1">
+                          +{achievement.points} điểm
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 py-8">
+                  Chưa có thành tựu nào. Hãy chơi game để mở khóa!
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -211,30 +271,38 @@ export default function Profile({ onLogout }) {
               <CardDescription>Các game bạn chơi nhiều nhất</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {[
-                  { name: 'Cờ Caro 5', plays: 85, winRate: '75%' },
-                  { name: 'Tic-Tac-Toe', plays: 62, winRate: '80%' },
-                  { name: 'Ghép hàng 3', plays: 45, winRate: '68%' },
-                  { name: 'Rắn săn mồi', plays: 38, winRate: '62%' },
-                ].map((game, index) => (
-                  <div key={game.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
-                        {index + 1}
+              {favoriteGames.length > 0 ? (
+                <div className="space-y-4">
+                  {favoriteGames.map((game, index) => (
+                    <div
+                      key={game.id}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium">{game.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {game.plays} ván đã chơi
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">{game.name}</p>
-                        <p className="text-sm text-gray-500">{game.plays} ván đã chơi</p>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-green-600">
+                          {game.win_rate}
+                        </div>
+                        <div className="text-xs text-gray-500">Tỷ lệ thắng</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">{game.winRate}</div>
-                      <div className="text-xs text-gray-500">Tỷ lệ thắng</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 py-8">
+                  Chưa chơi game nào. Hãy bắt đầu chơi!
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

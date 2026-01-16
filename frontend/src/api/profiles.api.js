@@ -13,4 +13,16 @@ export const profilesApi = {
     // GET /api/profiles/me/stats
     return http.get("/profiles/me/stats").then((r) => r.data);
   },
+  topAchievements(limit = 4) {
+    // GET /api/profiles/me/top-achievements
+    return http
+      .get("/profiles/me/top-achievements", { params: { limit } })
+      .then((r) => r.data);
+  },
+  favoriteGames(limit = 4) {
+    // GET /api/profiles/me/favorite-games
+    return http
+      .get("/profiles/me/favorite-games", { params: { limit } })
+      .then((r) => r.data);
+  },
 };
