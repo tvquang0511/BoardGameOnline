@@ -1,4 +1,3 @@
-import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -21,28 +20,18 @@ export default function AdminLayout({ children, onLogout }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white shadow-lg flex flex-col">
-        <div className="p-6 border-b border-gray-800">
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-card text-card-foreground border-r border-border shadow-sm flex flex-col">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="bg-gradient-to-br from-orange-500 to-red-600 p-2 rounded-lg">
               <LayoutDashboard className="w-6 h-6 text-white" />
             </div>
             <span className="text-xl font-bold">Admin Panel</span>
           </div>
-
-          {/* Back to user site */}
-          <div className="mt-3">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-sm"
-            >
-              <Home className="w-4 h-4 text-gray-200" />
-              <span className="text-gray-200">Về trang người dùng</span>
-            </Link>
-          </div>
         </div>
+
         <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-2">
             {navigation.map((item) => {
@@ -55,7 +44,7 @@ export default function AdminLayout({ children, onLogout }) {
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                       isActive
                         ? "bg-gradient-to-r from-orange-500 to-red-600 text-white"
-                        : "text-gray-300 hover:bg-gray-800"
+                        : "text-foreground hover:bg-muted"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -64,13 +53,25 @@ export default function AdminLayout({ children, onLogout }) {
                 </li>
               );
             })}
+
+            {/* link to user site in navbar list */}
+            <li>
+              <Link
+                to="/"
+                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-foreground hover:bg-muted"
+              >
+                <Home className="w-5 h-5" />
+                <span>Người dùng</span>
+              </Link>
+            </li>
           </ul>
         </nav>
-        <div className="p-4 border-t border-gray-800 space-y-2">
+
+        <div className="p-4 border-t border-border space-y-2">
           <Button
             onClick={onLogout}
             variant="outline"
-            className="w-full flex items-center gap-2 text-red-400 border-red-800 hover:bg-red-950"
+            className="w-full flex items-center gap-2 border-border"
           >
             <LogOut className="w-4 h-4" />
             Đăng xuất
@@ -79,7 +80,7 @@ export default function AdminLayout({ children, onLogout }) {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">{children}</main>
+      <main className="ml-64 p-8 bg-background">{children}</main>
     </div>
   );
 }

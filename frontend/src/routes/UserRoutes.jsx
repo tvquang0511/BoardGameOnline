@@ -3,15 +3,15 @@ import { Route, Navigate } from 'react-router-dom';
 
 import Dashboard from '../pages/client/Dashboard';
 
-// ✅ NEW unified board games page
 import GamesPage from '../pages/games';
-
 import Profile from '../pages/client/Profile';
 import Friends from '../pages/client/Friends';
 import Messages from '../pages/client/Messages';
 import Achievements from '../pages/client/Achievements';
 import Ranking from '../pages/client/Ranking';
 import EditProfile from '../pages/client/EditProfile';
+import AppearanceSettings from "../pages/client/AppearanceSettings";
+
 
 export default function UserRoutes({ onLogout, isAuthenticated }) {
   return (
@@ -36,6 +36,7 @@ export default function UserRoutes({ onLogout, isAuthenticated }) {
       <Route path="/achievements" element={isAuthenticated ? <Achievements onLogout={onLogout} /> : <Navigate to="/login" replace />} />
       <Route path="/ranking" element={isAuthenticated ? <Ranking onLogout={onLogout} /> : <Navigate to="/login" replace />} />
       <Route path="/profile/edit" element={isAuthenticated ? <EditProfile onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+      <Route path="/appearance" element={isAuthenticated ? <AppearanceSettings onLogout={onLogout} /> : <Navigate to="/login" replace />} />
     </>
   );
 }
