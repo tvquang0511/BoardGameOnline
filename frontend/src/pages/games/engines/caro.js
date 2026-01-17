@@ -1,4 +1,4 @@
-import { deepCopy, randInt } from "../utils";
+import { deepCopy } from "../utils";
 
 const DIRS = [
   [0, 1],

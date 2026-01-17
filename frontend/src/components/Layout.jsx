@@ -1,19 +1,44 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Gamepad2, User, Users, MessageSquare, Trophy, BarChart3, Settings, LogOut } from 'lucide-react';
-import { Button } from './ui/button';
+import { Link, useLocation } from "react-router-dom";
+import {
+  Home,
+  Gamepad2,
+  User,
+  Users,
+  MessageSquare,
+  Trophy,
+  BarChart3,
+  Settings,
+  LogOut,
+} from "lucide-react";
+import { Button } from "./ui/button";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Layout({ children, onLogout }) {
   const location = useLocation();
+  const { isAdmin, user } = useAuth();
 
-  const navigation = [
-    { name: 'Trang chủ', href: '/', icon: Home },
-    { name: 'Trò chơi', href: '/games', icon: Gamepad2 },
-    { name: 'Hồ sơ', href: '/profile', icon: User },
-    { name: 'Bạn bè', href: '/friends', icon: Users },
-    { name: 'Tin nhắn', href: '/messages', icon: MessageSquare },
-    { name: 'Thành tựu', href: '/achievements', icon: Trophy },
-    { name: 'Xếp hạng', href: '/ranking', icon: BarChart3 },
+  // fallback check in case useAuth doesn't expose isAdmin but exposes user.role / user.roles
+  const showAdmin =
+    Boolean(isAdmin) ||
+    Boolean(
+      user &&
+      (user.role === "admin" ||
+        (Array.isArray(user.roles) && user.roles.includes("admin"))),
+    );
+
+  const baseNavigation = [
+    { name: "Trang chủ", href: "/", icon: Home },
+    { name: "Trò chơi", href: "/games", icon: Gamepad2 },
+    { name: "Hồ sơ", href: "/profile", icon: User },
+    { name: "Bạn bè", href: "/friends", icon: Users },
+    { name: "Tin nhắn", href: "/messages", icon: MessageSquare },
+    { name: "Thành tựu", href: "/achievements", icon: Trophy },
+    { name: "Xếp hạng", href: "/ranking", icon: BarChart3 },
   ];
+
+  const navigation = showAdmin
+    ? [...baseNavigation, { name: "Admin", href: "/admin", icon: Settings }]
+    : baseNavigation;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -40,8 +65,8 @@ export default function Layout({ children, onLogout }) {
                     to={item.href}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                       isActive
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -65,9 +90,7 @@ export default function Layout({ children, onLogout }) {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
-        {children}
-      </main>
+      <main className="ml-64 p-8">{children}</main>
     </div>
   );
 }

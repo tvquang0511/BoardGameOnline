@@ -134,8 +134,7 @@ export default function GamesPage({ onLogout }) {
     [state.boardSize],
   );
 
-  const [timeSeconds, setTimeSeconds] = useState(0); // session time
-  const [moveSeconds, setMoveSeconds] = useState(0); // per-move timer (for caro4/caro5)
+  const [timeSeconds, setTimeSeconds] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -174,46 +173,55 @@ export default function GamesPage({ onLogout }) {
     return null;
   })();
 
-  // Timer (session)
+  // Timer
   useEffect(() => {
     if (state.mode !== "play" || winner || sessionFinished) return;
     const t = setInterval(() => setTimeSeconds((p) => p + 1), 1000);
     return () => clearInterval(t);
   }, [state.mode, winner, sessionFinished]);
 
-  // Per-move timer for caro4/caro5
   useEffect(() => {
-    if (state.mode !== "play" || !state.activeGameId) return;
-    if (!["caro4", "caro5"].includes(state.activeGameId)) return;
-    const ag = state[state.activeGameId];
-    if (!ag) return;
-    const limit = ag?.timeLimitSeconds ?? ag?.time_limit_seconds ?? null;
-    if (!limit) return;
-    if (winner || sessionFinished) return;
+    if (
+      state.mode !== "play" ||
+      state.activeGameId !== "snake" ||
+      sessionFinished ||
+      gameResult
+    )
+      return;
 
-    const t = setInterval(() => setMoveSeconds((p) => p + 1), 1000);
+    const ms = state.snake.tickMs || 160;
+    const t = setInterval(
+      () =>
+        dispatch({
+          type: "GAME",
+          gameId: "snake",
+          gameAction: { type: "TICK" },
+        }),
+      ms,
+    );
     return () => clearInterval(t);
   }, [
     state.mode,
     state.activeGameId,
-    state.caro4?.turn,
-    state.caro5?.turn,
-    state.caro4?.board?.length,
-    state.caro5?.board?.length,
-    winner,
+    state.snake.tickMs,
     sessionFinished,
+    gameResult,
   ]);
 
-  // Reset per-move timer when turn changes or when game is (re)restored or when user starts a new game
   useEffect(() => {
-    setMoveSeconds(0);
-  }, [
-    state.activeGameId,
-    // reset when active game turn changes
-    state.caro4 && state.caro4.turn,
-    state.caro5 && state.caro5.turn,
-    // restore state call will change the object so this also resets
-  ]);
+    if (state.mode !== "play" || state.activeGameId !== "memory") return;
+    if (!state.memory.lock) return;
+    const t = setTimeout(
+      () =>
+        dispatch({
+          type: "GAME",
+          gameId: "memory",
+          gameAction: { type: "TICK" },
+        }),
+      650,
+    );
+    return () => clearTimeout(t);
+  }, [state.mode, state.activeGameId, state.memory.lock]);
 
   const activeConfig = state.activeGameId
     ? getGameConfig(state.activeGameId)
@@ -300,102 +308,34 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner, sessionId, sessionFinished]);
 
-  // Per-move timeout handler (only for caro4/caro5)
-  useEffect(() => {
-    if (!state.activeGameId) return;
-    if (!["caro4", "caro5"].includes(state.activeGameId)) return;
-    const ag = state[state.activeGameId];
-    if (!ag) return;
-    const limit = ag?.timeLimitSeconds ?? ag?.time_limit_seconds ?? null;
-    if (!limit) return;
-    if (winner || sessionFinished) return;
-    if (moveSeconds < limit) return;
-
-    // handle timeout for current turn
-    const handleTimeout = async () => {
-      try {
-        const currentTurn = ag.turn; // HUMAN or CPU
-        let result;
-        if (currentTurn === "HUMAN") {
-          // human failed to move within limit -> lose
-          result = "lose";
-        } else {
-          // cpu failed to move within limit -> win
-          result = "win";
-        }
-        setGameResult(result);
-        console.log("⏱️ Move time limit exceeded:", {
-          game: state.activeGameId,
-          currentTurn,
-          limit,
-        });
-
-        // finish session if exists
-        if (sessionId) {
-          try {
-            const response = await sessionsApi.finish(sessionId, {
-              result,
-              score,
-              duration_seconds: timeSeconds,
-            });
-            console.log(
-              "✅ Session finished due to move timeout:",
-              response.session.id,
-            );
-          } catch (err) {
-            console.error("Failed to finish session on move timeout:", err);
-          }
-        }
-
-        setSessionFinished(true);
-      } catch (err) {
-        console.error("Move timeout handling error:", err);
-      }
-    };
-
-    handleTimeout();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    moveSeconds,
-    state.activeGameId,
-    state.caro4,
-    state.caro5,
-    sessionId,
-    winner,
-    sessionFinished,
-  ]);
-
-  // Time limit watcher for other games (unchanged behavior: limit for whole session)
+  // Time limit watcher
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
-    if (["caro4", "caro5"].includes(state.activeGameId)) return; // skip for caro games, handled per-move
     const gs = state[state.activeGameId];
     const limit = gs?.timeLimitSeconds ?? gs?.time_limit_seconds ?? null;
     if (!limit) return;
     if (timeSeconds < limit) return;
     const handleTimeUp = async () => {
       try {
-        setGameResult("lose");
+        const isSnake = state.activeGameId === "snake";
+        const result = isSnake ? "win" : "lose";
+
+        setGameResult(result);
+
         if (sessionId) {
-          try {
-            const response = await sessionsApi.finish(sessionId, {
-              result: "lose",
-              score,
-              duration_seconds: timeSeconds,
-            });
-            console.log(
-              "⏱️ Session finished due to timeout:",
-              response.session.id,
-            );
-          } catch (err) {
-            console.error("Failed to finish session on timeout:", err);
-          }
+          await sessionsApi.finish(sessionId, {
+            result,
+            score,
+            duration_seconds: timeSeconds,
+          });
         }
+
         setSessionFinished(true);
       } catch (err) {
         console.error("Time up handling error:", err);
       }
     };
+
     handleTimeUp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeSeconds, state.mode, state.activeGameId, sessionId, sessionFinished]);
@@ -502,7 +442,6 @@ export default function GamesPage({ onLogout }) {
           gameAction: { type: "RESTORE_STATE", state: initialState },
         });
         setTimeSeconds(0);
-        setMoveSeconds(0);
         setSessionId(null);
         setSessionFinished(false);
         setGameResult(null);
@@ -553,7 +492,6 @@ export default function GamesPage({ onLogout }) {
       dispatch({ type: "SET_BOARD_SIZE", boardSize: DEFAULT_BOARD_SIZE });
       dispatch({ type: "SET_MODE", mode: "select", activeGameId: null });
       setTimeSeconds(0);
-      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -645,7 +583,6 @@ export default function GamesPage({ onLogout }) {
         gameAction: { type: "RESTORE_STATE", state: merged },
       });
       setTimeSeconds(saved.data.timeSeconds || 0);
-      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -694,7 +631,6 @@ export default function GamesPage({ onLogout }) {
         });
       }
       setTimeSeconds(0);
-      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -740,7 +676,6 @@ export default function GamesPage({ onLogout }) {
         gameAction: { type: "RESTORE_STATE", state: initialState },
       });
       setTimeSeconds(0);
-      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -788,8 +723,6 @@ export default function GamesPage({ onLogout }) {
               boardSize: ag.boardSize,
               winLen: ag.winLen,
               aiLevel: ag.aiLevel ?? ag.ai_level ?? "medium",
-              timeLimitSeconds:
-                ag.timeLimitSeconds ?? ag.time_limit_seconds ?? null, // send per-move limit
             }),
           });
           if (!mounted) return;
@@ -860,10 +793,6 @@ export default function GamesPage({ onLogout }) {
               heuristic lookahead.
             </div>
             <div>• Chọn ô: di chuyển con trỏ đến ô và nhấn Enter.</div>
-            <div>
-              • Lưu ý: nếu game cấu hình time_limit_seconds thì đó là giới hạn
-              thời gian cho mỗi lượt (per-move) — nếu bạn vượt quá bạn sẽ thua.
-            </div>
           </>
         );
       case "tictactoe":
@@ -963,22 +892,10 @@ export default function GamesPage({ onLogout }) {
           score={score}
           timeSeconds={timeSeconds}
           timeLimitSeconds={activeTimeLimit}
-          remainingSeconds={
-            activeTimeLimit
-              ? Math.max(
-                  0,
-                  activeTimeLimit -
-                    (["caro4", "caro5"].includes(state.activeGameId)
-                      ? moveSeconds
-                      : timeSeconds),
-                )
-              : null
-          }
           winScore={activeWinScore}
           onResetGame={() => {
             dispatch({ type: "RESET_GAME" });
             setTimeSeconds(0);
-            setMoveSeconds(0);
             setSessionId(null);
             setSessionFinished(false);
             setGameResult(null);

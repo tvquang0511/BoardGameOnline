@@ -1,16 +1,23 @@
-import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BarChart3, Gamepad2, LogOut, Home } from 'lucide-react';
-import { Button } from './ui/button';
+import { ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  BarChart3,
+  Gamepad2,
+  LogOut,
+  Home,
+} from "lucide-react";
+import { Button } from "./ui/button";
 
 export default function AdminLayout({ children, onLogout }) {
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Quản lý người dùng', href: '/admin/users', icon: Users },
-    { name: 'Thống kê', href: '/admin/statistics', icon: BarChart3 },
-    { name: 'Quản lý Game', href: '/admin/games', icon: Gamepad2 },
+    { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    { name: "Quản lý người dùng", href: "/admin/users", icon: Users },
+    { name: "Thống kê", href: "/admin/statistics", icon: BarChart3 },
+    { name: "Quản lý Game", href: "/admin/games", icon: Gamepad2 },
   ];
 
   return (
@@ -24,6 +31,17 @@ export default function AdminLayout({ children, onLogout }) {
             </div>
             <span className="text-xl font-bold">Admin Panel</span>
           </div>
+
+          {/* Back to user site */}
+          <div className="mt-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-sm"
+            >
+              <Home className="w-4 h-4 text-gray-200" />
+              <span className="text-gray-200">Về trang người dùng</span>
+            </Link>
+          </div>
         </div>
         <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-2">
@@ -36,8 +54,8 @@ export default function AdminLayout({ children, onLogout }) {
                     to={item.href}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                       isActive
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-800'
+                        ? "bg-gradient-to-r from-orange-500 to-red-600 text-white"
+                        : "text-gray-300 hover:bg-gray-800"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -61,9 +79,7 @@ export default function AdminLayout({ children, onLogout }) {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
-        {children}
-      </main>
+      <main className="ml-64 p-8">{children}</main>
     </div>
   );
 }
