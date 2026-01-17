@@ -26,7 +26,6 @@ export default function ControlsCard({
   score,
   timeSeconds,
   timeLimitSeconds,
-  remainingSeconds,
   winScore,
   onResetGame,
   onBackToSelect,
@@ -38,17 +37,6 @@ export default function ControlsCard({
   pixelColors,
   onPixelSetColor,
 }) {
-  // percentage for a simple progress bar (0..100)
-  const progressPercent =
-    typeof timeLimitSeconds === "number" && timeLimitSeconds > 0 && typeof remainingSeconds === "number"
-      ? Math.round((remainingSeconds / timeLimitSeconds) * 100)
-      : null;
-
-  // low-time indicator if remaining less than 15% or <=10s
-  const isLowTime =
-    (typeof remainingSeconds === "number" && typeof timeLimitSeconds === "number" && remainingSeconds <= Math.max(10, Math.floor(timeLimitSeconds * 0.15))) ||
-    (typeof remainingSeconds === "number" && remainingSeconds <= 10);
-
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -71,31 +59,6 @@ export default function ControlsCard({
 
         {typeof timeLimitSeconds === "number" ? (
           <Badge variant="outline">Limit: {formatTime(timeLimitSeconds)}</Badge>
-        ) : null}
-
-        {typeof remainingSeconds === "number" ? (
-          <Badge
-            // keep badge variant but add red text when low time
-            className={isLowTime ? "text-red-600" : ""}
-            variant={isLowTime ? "secondary" : "outline"}
-          >
-            Remaining: {formatTime(remainingSeconds)}
-          </Badge>
-        ) : null}
-
-        {/* simple progress bar under badges when time limit exists */}
-        {progressPercent !== null ? (
-          <div className="w-full mt-1">
-            <div className="h-2 w-full bg-muted rounded overflow-hidden">
-              <div
-                className={`h-2 transition-all ${isLowTime ? "bg-red-500" : "bg-emerald-500"}`}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {progressPercent}% remaining
-            </div>
-          </div>
         ) : null}
 
         {mode === "play" && gameId === "pixel" ? (

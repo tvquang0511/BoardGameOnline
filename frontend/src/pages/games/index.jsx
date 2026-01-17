@@ -131,10 +131,11 @@ export default function GamesPage({ onLogout }) {
 
   const selectCells = useMemo(
     () => buildSelectCells(state.boardSize),
-    [state.boardSize]
+    [state.boardSize],
   );
 
-  const [timeSeconds, setTimeSeconds] = useState(0);
+  const [timeSeconds, setTimeSeconds] = useState(0); // session time
+  const [moveSeconds, setMoveSeconds] = useState(0); // per-move timer (for caro4/caro5)
   const [showHelp, setShowHelp] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -173,42 +174,46 @@ export default function GamesPage({ onLogout }) {
     return null;
   })();
 
-  // Timer
+  // Timer (session)
   useEffect(() => {
     if (state.mode !== "play" || winner || sessionFinished) return;
     const t = setInterval(() => setTimeSeconds((p) => p + 1), 1000);
     return () => clearInterval(t);
   }, [state.mode, winner, sessionFinished]);
 
+  // Per-move timer for caro4/caro5
   useEffect(() => {
-    if (state.mode !== "play" || state.activeGameId !== "snake") return;
-    const ms = state.snake.tickMs || 160;
-    const t = setInterval(
-      () =>
-        dispatch({
-          type: "GAME",
-          gameId: "snake",
-          gameAction: { type: "TICK" },
-        }),
-      ms
-    );
-    return () => clearInterval(t);
-  }, [state.mode, state.activeGameId, state.snake.tickMs]);
+    if (state.mode !== "play" || !state.activeGameId) return;
+    if (!["caro4", "caro5"].includes(state.activeGameId)) return;
+    const ag = state[state.activeGameId];
+    if (!ag) return;
+    const limit = ag?.timeLimitSeconds ?? ag?.time_limit_seconds ?? null;
+    if (!limit) return;
+    if (winner || sessionFinished) return;
 
+    const t = setInterval(() => setMoveSeconds((p) => p + 1), 1000);
+    return () => clearInterval(t);
+  }, [
+    state.mode,
+    state.activeGameId,
+    state.caro4?.turn,
+    state.caro5?.turn,
+    state.caro4?.board?.length,
+    state.caro5?.board?.length,
+    winner,
+    sessionFinished,
+  ]);
+
+  // Reset per-move timer when turn changes or when game is (re)restored or when user starts a new game
   useEffect(() => {
-    if (state.mode !== "play" || state.activeGameId !== "memory") return;
-    if (!state.memory.lock) return;
-    const t = setTimeout(
-      () =>
-        dispatch({
-          type: "GAME",
-          gameId: "memory",
-          gameAction: { type: "TICK" },
-        }),
-      650
-    );
-    return () => clearTimeout(t);
-  }, [state.mode, state.activeGameId, state.memory.lock]);
+    setMoveSeconds(0);
+  }, [
+    state.activeGameId,
+    // reset when active game turn changes
+    state.caro4 && state.caro4.turn,
+    state.caro5 && state.caro5.turn,
+    // restore state call will change the object so this also resets
+  ]);
 
   const activeConfig = state.activeGameId
     ? getGameConfig(state.activeGameId)
@@ -253,10 +258,10 @@ export default function GamesPage({ onLogout }) {
       winner === "X" || winner === "WIN"
         ? "win"
         : winner === "O" || winner === "LOSE"
-        ? "lose"
-        : winner === "DRAW"
-        ? "draw"
-        : "draw";
+          ? "lose"
+          : winner === "DRAW"
+            ? "draw"
+            : "draw";
     setGameResult(result);
     console.log("🏆 Game result set:", result);
   }, [winner, state.activeGameId]);
@@ -270,10 +275,10 @@ export default function GamesPage({ onLogout }) {
           winner === "X" || winner === "WIN"
             ? "win"
             : winner === "O" || winner === "LOSE"
-            ? "lose"
-            : winner === "DRAW"
-            ? "draw"
-            : "draw";
+              ? "lose"
+              : winner === "DRAW"
+                ? "draw"
+                : "draw";
         const finalScore = score;
         const finalTime = timeSeconds;
         const response = await sessionsApi.finish(sessionId, {
@@ -285,7 +290,7 @@ export default function GamesPage({ onLogout }) {
         console.log(
           "✅ Session finished:",
           response.session.id,
-          `Score: ${finalScore}, Time: ${finalTime}s, Result: ${result}`
+          `Score: ${finalScore}, Time: ${finalTime}s, Result: ${result}`,
         );
       } catch (error) {
         console.error("❌ Failed to finish session:", error);
@@ -295,9 +300,75 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner, sessionId, sessionFinished]);
 
-  // Time limit watcher
+  // Per-move timeout handler (only for caro4/caro5)
+  useEffect(() => {
+    if (!state.activeGameId) return;
+    if (!["caro4", "caro5"].includes(state.activeGameId)) return;
+    const ag = state[state.activeGameId];
+    if (!ag) return;
+    const limit = ag?.timeLimitSeconds ?? ag?.time_limit_seconds ?? null;
+    if (!limit) return;
+    if (winner || sessionFinished) return;
+    if (moveSeconds < limit) return;
+
+    // handle timeout for current turn
+    const handleTimeout = async () => {
+      try {
+        const currentTurn = ag.turn; // HUMAN or CPU
+        let result;
+        if (currentTurn === "HUMAN") {
+          // human failed to move within limit -> lose
+          result = "lose";
+        } else {
+          // cpu failed to move within limit -> win
+          result = "win";
+        }
+        setGameResult(result);
+        console.log("⏱️ Move time limit exceeded:", {
+          game: state.activeGameId,
+          currentTurn,
+          limit,
+        });
+
+        // finish session if exists
+        if (sessionId) {
+          try {
+            const response = await sessionsApi.finish(sessionId, {
+              result,
+              score,
+              duration_seconds: timeSeconds,
+            });
+            console.log(
+              "✅ Session finished due to move timeout:",
+              response.session.id,
+            );
+          } catch (err) {
+            console.error("Failed to finish session on move timeout:", err);
+          }
+        }
+
+        setSessionFinished(true);
+      } catch (err) {
+        console.error("Move timeout handling error:", err);
+      }
+    };
+
+    handleTimeout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    moveSeconds,
+    state.activeGameId,
+    state.caro4,
+    state.caro5,
+    sessionId,
+    winner,
+    sessionFinished,
+  ]);
+
+  // Time limit watcher for other games (unchanged behavior: limit for whole session)
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
+    if (["caro4", "caro5"].includes(state.activeGameId)) return; // skip for caro games, handled per-move
     const gs = state[state.activeGameId];
     const limit = gs?.timeLimitSeconds ?? gs?.time_limit_seconds ?? null;
     if (!limit) return;
@@ -314,7 +385,7 @@ export default function GamesPage({ onLogout }) {
             });
             console.log(
               "⏱️ Session finished due to timeout:",
-              response.session.id
+              response.session.id,
             );
           } catch (err) {
             console.error("Failed to finish session on timeout:", err);
@@ -396,7 +467,7 @@ export default function GamesPage({ onLogout }) {
         const defaultConfig = gm.default_config || {};
         const { init: initialState, boardSize } = buildInitialGameState(
           cell.gameId,
-          defaultConfig
+          defaultConfig,
         );
         setPendingDefaultConfig(defaultConfig);
 
@@ -431,6 +502,7 @@ export default function GamesPage({ onLogout }) {
           gameAction: { type: "RESTORE_STATE", state: initialState },
         });
         setTimeSeconds(0);
+        setMoveSeconds(0);
         setSessionId(null);
         setSessionFinished(false);
         setGameResult(null);
@@ -481,6 +553,7 @@ export default function GamesPage({ onLogout }) {
       dispatch({ type: "SET_BOARD_SIZE", boardSize: DEFAULT_BOARD_SIZE });
       dispatch({ type: "SET_MODE", mode: "select", activeGameId: null });
       setTimeSeconds(0);
+      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -516,7 +589,7 @@ export default function GamesPage({ onLogout }) {
 
   useEffect(
     () => attachInput({ onAction }),
-    [state.mode, state.activeGameId, state.cursor, selectCells]
+    [state.mode, state.activeGameId, state.cursor, selectCells],
   );
 
   const handleContinueGame = async () => {
@@ -572,6 +645,7 @@ export default function GamesPage({ onLogout }) {
         gameAction: { type: "RESTORE_STATE", state: merged },
       });
       setTimeSeconds(saved.data.timeSeconds || 0);
+      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -605,7 +679,7 @@ export default function GamesPage({ onLogout }) {
         }
         const { init: initialState, boardSize } = buildInitialGameState(
           pendingGameId,
-          defaultConfig
+          defaultConfig,
         );
         dispatch({
           type: "SET_MODE",
@@ -620,6 +694,7 @@ export default function GamesPage({ onLogout }) {
         });
       }
       setTimeSeconds(0);
+      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -640,7 +715,7 @@ export default function GamesPage({ onLogout }) {
       }
       const { init: initialState, boardSize } = buildInitialGameState(
         pendingGameId,
-        defaultConfig || {}
+        defaultConfig || {},
       );
       initialState.aiLevel = difficulty;
       initialState.winScore =
@@ -665,6 +740,7 @@ export default function GamesPage({ onLogout }) {
         gameAction: { type: "RESTORE_STATE", state: initialState },
       });
       setTimeSeconds(0);
+      setMoveSeconds(0);
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
@@ -684,9 +760,6 @@ export default function GamesPage({ onLogout }) {
     null;
   const activeWinScore =
     activeGameState?.winScore ?? activeGameState?.win_score ?? null;
-  const remainingSeconds = activeTimeLimit
-    ? Math.max(0, activeTimeLimit - timeSeconds)
-    : null;
 
   useEffect(() => {
     // auto-invoke AI when active game's turn === "CPU"
@@ -715,6 +788,8 @@ export default function GamesPage({ onLogout }) {
               boardSize: ag.boardSize,
               winLen: ag.winLen,
               aiLevel: ag.aiLevel ?? ag.ai_level ?? "medium",
+              timeLimitSeconds:
+                ag.timeLimitSeconds ?? ag.time_limit_seconds ?? null, // send per-move limit
             }),
           });
           if (!mounted) return;
@@ -785,6 +860,10 @@ export default function GamesPage({ onLogout }) {
               heuristic lookahead.
             </div>
             <div>• Chọn ô: di chuyển con trỏ đến ô và nhấn Enter.</div>
+            <div>
+              • Lưu ý: nếu game cấu hình time_limit_seconds thì đó là giới hạn
+              thời gian cho mỗi lượt (per-move) — nếu bạn vượt quá bạn sẽ thua.
+            </div>
           </>
         );
       case "tictactoe":
@@ -884,11 +963,22 @@ export default function GamesPage({ onLogout }) {
           score={score}
           timeSeconds={timeSeconds}
           timeLimitSeconds={activeTimeLimit}
-          remainingSeconds={remainingSeconds}
+          remainingSeconds={
+            activeTimeLimit
+              ? Math.max(
+                  0,
+                  activeTimeLimit -
+                    (["caro4", "caro5"].includes(state.activeGameId)
+                      ? moveSeconds
+                      : timeSeconds),
+                )
+              : null
+          }
           winScore={activeWinScore}
           onResetGame={() => {
             dispatch({ type: "RESET_GAME" });
             setTimeSeconds(0);
+            setMoveSeconds(0);
             setSessionId(null);
             setSessionFinished(false);
             setGameResult(null);
@@ -913,8 +1003,8 @@ export default function GamesPage({ onLogout }) {
               gameResult === "win"
                 ? "border-green-500 bg-gradient-to-r from-green-50 to-emerald-50"
                 : gameResult === "lose"
-                ? "border-red-500 bg-gradient-to-r from-red-50 to-rose-50"
-                : "border-yellow-500 bg-gradient-to-r from-yellow-50 to-amber-50"
+                  ? "border-red-500 bg-gradient-to-r from-red-50 to-rose-50"
+                  : "border-yellow-500 bg-gradient-to-r from-yellow-50 to-amber-50"
             }`}
           >
             <CardHeader className="pb-2">
@@ -922,8 +1012,8 @@ export default function GamesPage({ onLogout }) {
                 {gameResult === "win"
                   ? "🏆 Chiến thắng!"
                   : gameResult === "lose"
-                  ? "😔 Thất bại"
-                  : "🤝 Hòa"}
+                    ? "😔 Thất bại"
+                    : "🤝 Hòa"}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -932,16 +1022,16 @@ export default function GamesPage({ onLogout }) {
                   {gameResult === "win"
                     ? "🎊"
                     : gameResult === "lose"
-                    ? "💔"
-                    : "🤷‍♂️"}
+                      ? "💔"
+                      : "🤷‍♂️"}
                 </div>
                 <div>
                   <p className="text-xl font-bold">
                     {gameResult === "win"
                       ? "Xuất sắc! Bạn đã chiến thắng!"
                       : gameResult === "lose"
-                      ? "Đừng bỏ cuộc! Thử lại nhé!"
-                      : "Kết quả hòa! Chơi lại để phân thắng bại!"}
+                        ? "Đừng bỏ cuộc! Thử lại nhé!"
+                        : "Kết quả hòa! Chơi lại để phân thắng bại!"}
                   </p>
                   <p className="text-lg text-muted-foreground mt-1">
                     Điểm số: {score} | Thời gian: {Math.floor(timeSeconds / 60)}
