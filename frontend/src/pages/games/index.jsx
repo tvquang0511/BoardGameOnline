@@ -14,6 +14,8 @@ import { useAuth } from "@/context/AuthContext";
 import { sessionsApi } from "@/api/sessions.api";
 import { savedGamesApi } from "@/api/savedGames.api";
 import { gamesApi } from "@/api/games.api";
+import GameReviewsDialog from "@/components/GameReviewsDialog";
+import { Star } from "lucide-react";
 import { attachInput } from "./input";
 import { wrap } from "./utils";
 
@@ -146,6 +148,28 @@ export default function GamesPage({ onLogout }) {
   // Caro difficulty
   const [pendingDefaultConfig, setPendingDefaultConfig] = useState(null);
   const [showDifficultyDialog, setShowDifficultyDialog] = useState(false);
+
+  // Review dialog
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedGameForReview, setSelectedGameForReview] = useState(null);
+  const [gamesMetadata, setGamesMetadata] = useState([]);
+
+  // Load games metadata with ratings
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await gamesApi.list({ all: false });
+        if (!mounted) return;
+        setGamesMetadata(data.games || []);
+      } catch (error) {
+        console.error("Failed to load games metadata:", error);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Winner detection (only real game-end conditions)
   const winner = (() => {
@@ -1041,22 +1065,86 @@ export default function GamesPage({ onLogout }) {
         </Dialog>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {GAME_CONFIGS.map((g) => (
-            <Card key={g.id} className="overflow-hidden">
-              <CardContent className="p-6 flex flex-col items-center justify-center text-center gap-3">
-                <div
-                  className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${g.legendGradient} flex items-center justify-center text-3xl`}
-                >
-                  {g.emoji}
-                </div>
-                <h3 className="font-semibold text-sm">{g.name}</h3>
-                <div className="text-xs text-muted-foreground">
-                  Chọn bằng ô màu trên bàn
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {GAME_CONFIGS.map((g) => {
+            const gameMeta = gamesMetadata.find((gm) => gm.slug === g.id);
+            const avgRating = gameMeta?.average_rating;
+            const reviewCount = gameMeta?.review_count || 0;
+
+            return (
+              <Card key={g.id} className="overflow-hidden">
+                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
+                  <div
+                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${g.legendGradient} flex items-center justify-center text-3xl`}
+                  >
+                    {g.emoji}
+                  </div>
+                  <h3 className="font-semibold text-sm">{g.name}</h3>
+                  <div className="text-xs text-muted-foreground">
+                    Chọn bằng ô màu trên bàn
+                  </div>
+
+                  {/* Rating Display */}
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                    <span className="font-medium">
+                      {avgRating ? parseFloat(avgRating).toFixed(1) : "N/A"}
+                    </span>
+                    <span className="text-gray-400">({reviewCount})</span>
+                  </div>
+
+                  {/* Review Button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-xs h-7"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      // If we don't have gameMeta yet, fetch it
+                      let gameId = gameMeta?.id;
+                      if (!gameId) {
+                        try {
+                          const gameData = await gamesApi.getBySlug(g.id);
+                          gameId = gameData.game.id;
+                        } catch (error) {
+                          console.error("Failed to get game:", error);
+                          return;
+                        }
+                      }
+                      setSelectedGameForReview({
+                        id: gameId,
+                        name: g.name,
+                      });
+                      setReviewDialogOpen(true);
+                    }}
+                  >
+                    📝 Đánh giá
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
+
+        {/* Review Dialog */}
+        {selectedGameForReview && (
+          <GameReviewsDialog
+            gameId={selectedGameForReview.id}
+            gameName={selectedGameForReview.name}
+            open={reviewDialogOpen}
+            onOpenChange={(open) => {
+              setReviewDialogOpen(open);
+              if (!open) {
+                // Reload games metadata when dialog closes to refresh ratings
+                gamesApi
+                  .list({ all: false })
+                  .then((data) => {
+                    setGamesMetadata(data.games || []);
+                  })
+                  .catch(console.error);
+              }
+            }}
+          />
+        )}
       </div>
     </Layout>
   );
