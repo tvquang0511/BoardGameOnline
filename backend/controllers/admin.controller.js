@@ -230,7 +230,10 @@ exports.getRecentActivity = async (req, res, next) => {
         "a.duration_seconds",
         "a.ip",
         "a.user_agent",
-        "a.state"
+        "a.state",
+        "profiles.display_name",
+        "profiles.avatar_url",
+        "profiles.level",
       )
       .from(
         db
@@ -248,7 +251,7 @@ exports.getRecentActivity = async (req, res, next) => {
             db.raw("null as duration_seconds"),
             "ip",
             "user_agent",
-            db.raw("null as state")
+            db.raw("null as state"),
           )
           .from("auth_sessions")
           .unionAll(
@@ -267,20 +270,21 @@ exports.getRecentActivity = async (req, res, next) => {
                 "sessions.duration_seconds",
                 db.raw("null as ip"),
                 db.raw("null as user_agent"),
-                "sessions.state"
+                "sessions.state",
               )
               .from("sessions")
-              .leftJoin("games", "sessions.game_id", "games.id")
+              .leftJoin("games", "sessions.game_id", "games.id"),
           )
-          .as("a")
+          .as("a"),
       )
-      .leftJoin("users", "a.user_id", "users.id");
+      .leftJoin("users", "a.user_id", "users.id")
+      .leftJoin("profiles", "profiles.user_id", "users.id");
     if (searchQuery) {
       baseQuery.where(function () {
         this.where("users.email", "ilike", `%${searchQuery}%`).orWhere(
           "a.game_name",
           "ilike",
-          `%${searchQuery}%`
+          `%${searchQuery}%`,
         );
       });
     }
@@ -305,6 +309,9 @@ exports.getRecentActivity = async (req, res, next) => {
             id: activity.user_id,
             email: activity.email,
             username: activity.username,
+            display_name: activity.display_name,
+            avatar_url: activity.avatar_url,
+            level: activity.level,
           }
         : null,
       duration_formatted:

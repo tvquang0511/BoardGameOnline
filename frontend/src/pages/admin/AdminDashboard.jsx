@@ -307,9 +307,12 @@ export default function AdminDashboard({ onLogout }) {
                       <div className="flex items-start gap-3">
                         <Avatar className="h-10 w-10">
                           <AvatarImage
-                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${getAvatarSeed(
-                              activity.user_id
-                            )}`}
+                            src={
+                              user?.avatar_url ||
+                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${getAvatarSeed(
+                                activity.user_id,
+                              )}`
+                            }
                           />
                           <AvatarFallback>
                             {user?.username?.charAt(0) ||
@@ -329,17 +332,23 @@ export default function AdminDashboard({ onLogout }) {
                             )}
                           </div>
                           <p className="font-medium">
-                            {user?.username ||
+                            {user?.display_name ||
+                              user?.username ||
                               user?.email ||
                               `User #${activity.user_id}`}
                           </p>
+                          {user?.level != null && (
+                            <div className="text-xs text-gray-500">
+                              Level{" "}
+                              <span className="font-medium">{user.level}</span>
+                            </div>
+                          )}
                           <div className="text-sm text-gray-600">
                             {activity.type === "auth" ? (
                               <></>
                             ) : (
                               <>
-                                Chơi {activity.game_name || "game"} - Mode:{" "}
-                                {activity.mode || "N/A"} - Điểm:{" "}
+                                Chơi {activity.game_name || "game"} - Điểm:{" "}
                                 <span className="font-medium">
                                   {activity.score || 0}
                                 </span>{" "}
@@ -353,14 +362,14 @@ export default function AdminDashboard({ onLogout }) {
                           <p className="text-xs text-gray-500 mt-1">
                             Bắt đầu:{" "}
                             {new Date(activity.started_at).toLocaleString(
-                              "vi-VN"
+                              "vi-VN",
                             )}
                             {activity.ended_at && (
                               <>
                                 {" "}
                                 • Kết thúc:{" "}
                                 {new Date(activity.ended_at).toLocaleString(
-                                  "vi-VN"
+                                  "vi-VN",
                                 )}
                               </>
                             )}
