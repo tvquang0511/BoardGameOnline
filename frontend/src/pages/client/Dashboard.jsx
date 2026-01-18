@@ -7,15 +7,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Trophy, Star, Target, Zap } from "lucide-react";
+import { Trophy, Star, Target, Zap, Gamepad2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { profilesApi } from "../../api/profiles.api";
 import { achievementsApi } from "../../api/achievements.api";
+import { gamesApi } from "../../api/games.api";
+import { useAuth } from "../../context/AuthContext";
 
 export default function Dashboard({ onLogout }) {
+  const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [myAchievements, setMyAchievements] = useState([]);
+
+  // recent games (infinite scroll)
+  const [recentGames, setRecentGames] = useState([]);
+  const [recentPage, setRecentPage] = useState(1);
+  const [recentLimit] = useState(10);
+  const [recentHasMore, setRecentHasMore] = useState(false);
+  const [recentLoading, setRecentLoading] = useState(false);
+
+  // most played
+  const [mostPlayed, setMostPlayed] = useState(null);
+  const [mostPlayedLoading, setMostPlayedLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -37,6 +51,71 @@ export default function Dashboard({ onLogout }) {
     };
   }, []);
 
+  // fetch most-played and first page of recent games once user is available
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+
+    const loadMostPlayed = async () => {
+      setMostPlayedLoading(true);
+      try {
+        const resp = await gamesApi.getMyMostPlayedGame();
+        if (!mounted) return;
+        setMostPlayed(resp.mostPlayed || null);
+      } catch (err) {
+        console.error("Failed to load most-played:", err);
+      } finally {
+        if (mounted) setMostPlayedLoading(false);
+      }
+    };
+
+    const loadRecent = async (page = 1) => {
+      setRecentLoading(true);
+      try {
+        const resp = await gamesApi.getMyRecentGames({
+          limit: recentLimit,
+          page,
+        });
+        if (!mounted) return;
+        setRecentHasMore(Boolean(resp.hasMore));
+        if (page === 1) setRecentGames(resp.results || []);
+        else setRecentGames((prev) => [...prev, ...(resp.results || [])]);
+        setRecentPage(page);
+      } catch (err) {
+        console.error("Failed to load recent games:", err);
+      } finally {
+        if (mounted) setRecentLoading(false);
+      }
+    };
+
+    loadMostPlayed();
+    loadRecent(1);
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const loadMoreRecent = async () => {
+    if (recentLoading || !recentHasMore) return;
+    const next = recentPage + 1;
+    try {
+      setRecentLoading(true);
+      const resp = await gamesApi.getMyRecentGames({
+        limit: recentLimit,
+        page: next,
+      });
+      setRecentGames((prev) => [...prev, ...(resp.results || [])]);
+      setRecentHasMore(Boolean(resp.hasMore));
+      setRecentPage(next);
+    } catch (err) {
+      console.error("Load more recent failed:", err);
+    } finally {
+      setRecentLoading(false);
+    }
+  };
+
   const unlockedCount = myAchievements.filter((x) => x.unlocked_at).length;
 
   const stats = useMemo(() => {
@@ -48,11 +127,16 @@ export default function Dashboard({ onLogout }) {
         color: "from-yellow-400 to-orange-500",
       },
       {
-        name: "Thắng liên tiếp",
-        value: "8",
-        icon: Trophy,
+        // show most-played game's name (or fallback)
+        name: "Trò chơi ưa thích",
+        value: mostPlayed?.game?.name
+          ? `${mostPlayed.game.name}`
+          : mostPlayedLoading
+            ? "Đang tải..."
+            : "Chưa có",
+        icon: Gamepad2,
         color: "from-blue-400 to-blue-600",
-      }, // TODO(API MISSING): streak
+      },
       {
         name: "Thành tựu",
         value: `${unlockedCount}/10`,
@@ -62,19 +146,11 @@ export default function Dashboard({ onLogout }) {
       {
         name: "Hạng",
         value: "#42",
-        icon: Zap,
+        icon: Trophy,
         color: "from-purple-400 to-purple-600",
-      }, // TODO(API MISSING): rank
+      },
     ];
-  }, [profile, unlockedCount]);
-
-  const recentGames = [
-    // TODO(API MISSING): cần API recent game_results
-    { name: "Cờ Caro 5", result: "Thắng", score: 250, date: "2 giờ trước" },
-    { name: "Tic-Tac-Toe", result: "Thắng", score: 100, date: "5 giờ trước" },
-    { name: "Rắn săn mồi", result: "Thua", score: -50, date: "Hôm qua" },
-    { name: "Ghép hàng 3", result: "Thắng", score: 180, date: "Hôm qua" },
-  ];
+  }, [profile, unlockedCount, mostPlayed, mostPlayedLoading]);
 
   return (
     <Layout onLogout={onLogout}>
@@ -104,7 +180,9 @@ export default function Dashboard({ onLogout }) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{stat.value}</div>
+                  <div className="text-3xl font-bold whitespace-pre-wrap">
+                    {stat.value}
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -137,24 +215,41 @@ export default function Dashboard({ onLogout }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentGames.map((game, index) => (
+              {recentGames.length === 0 && !recentLoading && (
+                <div className="text-sm text-gray-500">Chưa có ván nào.</div>
+              )}
+
+              {recentGames.map((game) => (
                 <div
-                  key={index}
+                  key={game.id}
                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium">{game.name}</p>
-                    <p className="text-sm text-gray-500">{game.date}</p>
+                    <p className="font-medium">
+                      {game.game_name || game.game?.name || "Không rõ"}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(game.created_at).toLocaleString()}
+                      {game.duration_seconds
+                        ? ` • ${game.duration_seconds}s`
+                        : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        game.result === "win" ||
+                        game.result === "WIN" ||
                         game.result === "Thắng"
                           ? "bg-green-100 text-green-700"
                           : "bg-red-100 text-red-700"
                       }`}
                     >
-                      {game.result}
+                      {game.result === "win" || game.result === "WIN"
+                        ? "Thắng"
+                        : game.result === "draw" || game.result === "DRAW"
+                          ? "Hòa"
+                          : "Thua"}
                     </span>
                     <span
                       className={`font-bold ${game.score > 0 ? "text-green-600" : "text-red-600"}`}
@@ -165,6 +260,14 @@ export default function Dashboard({ onLogout }) {
                   </div>
                 </div>
               ))}
+
+              {recentHasMore && (
+                <div className="flex justify-center">
+                  <Button onClick={loadMoreRecent} disabled={recentLoading}>
+                    {recentLoading ? "Đang tải..." : "Xem thêm"}
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

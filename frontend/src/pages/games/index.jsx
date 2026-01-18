@@ -137,6 +137,10 @@ export default function GamesPage({ onLogout }) {
   );
 
   const [timeSeconds, setTimeSeconds] = useState(0);
+
+  // per-turn counter in seconds
+  const [perTurnSeconds, setPerTurnSeconds] = useState(0);
+
   const [showHelp, setShowHelp] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -197,7 +201,15 @@ export default function GamesPage({ onLogout }) {
     return null;
   })();
 
-  // Timer
+  // Determine lock state: when player lost, lock input except ESC (BACK)
+  const isLocked = (() => {
+    // consider both normalized gameResult and raw winner values
+    const lostByResult = gameResult === "lose";
+    const lostByWinner = winner === "O" || winner === "LOSE";
+    return lostByResult || lostByWinner;
+  })();
+
+  // Timer (global match timer)
   useEffect(() => {
     if (state.mode !== "play" || winner || sessionFinished) return;
     const t = setInterval(() => setTimeSeconds((p) => p + 1), 1000);
@@ -345,29 +357,59 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner, sessionId, sessionFinished]);
 
-  // Time limit watcher
+  // Time limit watcher (match-level)
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
+    // For caro4, caro5 and tictactoe we treat timeLimitSeconds as per-turn, not match-level
+    if (["caro4", "caro5", "tictactoe"].includes(state.activeGameId)) return;
+
     const gs = state[state.activeGameId];
     const limit = gs?.timeLimitSeconds ?? gs?.time_limit_seconds ?? null;
     if (!limit) return;
     if (timeSeconds < limit) return;
+
     const handleTimeUp = async () => {
       try {
+        // Stop everything immediately: set gameResult and sessionFinished so all timers/effects stop
         const isSnake = state.activeGameId === "snake";
         const result = isSnake ? "win" : "lose";
 
         setGameResult(result);
+        setPerTurnSeconds(0);
+        // mark finished immediately so intervals stop
+        setSessionFinished(true);
+
+        // Normalize a winner-like flag into the game state so UI/engines that read winner can reflect finished state.
+        const currentGameState = state[state.activeGameId] || {};
+        const normalizedWinner = result === "lose" ? "LOSE" : "WIN";
+        // For snake, set dead=true so winner detection (snake.dead) reports LOSE
+        const patchedState = { ...currentGameState, winner: normalizedWinner };
+        if (state.activeGameId === "snake") patchedState.dead = true;
+
+        dispatch({
+          type: "GAME",
+          gameId: state.activeGameId,
+          gameAction: { type: "RESTORE_STATE", state: patchedState },
+        });
 
         if (sessionId) {
-          await sessionsApi.finish(sessionId, {
-            result,
-            score,
-            duration_seconds: timeSeconds,
-          });
+          // finish session remotely but don't wait before stopping UI/timers
+          try {
+            await sessionsApi.finish(sessionId, {
+              result,
+              score,
+              duration_seconds: timeSeconds,
+            });
+          } catch (err) {
+            console.error("Failed to finish session API call:", err);
+          }
         }
 
-        setSessionFinished(true);
+        console.log("⏱️ Time limit reached — session finished", {
+          game: state.activeGameId,
+          result,
+          timeSeconds,
+        });
       } catch (err) {
         console.error("Time up handling error:", err);
       }
@@ -500,6 +542,8 @@ export default function GamesPage({ onLogout }) {
       });
       return;
     }
+    // if locked (player lost) do not allow selecting moves
+    if (isLocked) return;
     dispatch({
       type: "GAME",
       gameId: id,
@@ -532,10 +576,14 @@ export default function GamesPage({ onLogout }) {
       setSessionId(null);
       setSessionFinished(false);
       setGameResult(null);
+      setPerTurnSeconds(0);
     }
   };
 
   const onAction = (a) => {
+    // Lock behavior: when player lost, only allow BACK (ESC). Ignore everything else.
+    if (isLocked && a !== "BACK") return;
+
     if (a === "HELP") {
       setShowHelp((v) => !v);
       return;
@@ -564,7 +612,7 @@ export default function GamesPage({ onLogout }) {
 
   useEffect(
     () => attachInput({ onAction }),
-    [state.mode, state.activeGameId, state.cursor, selectCells],
+    [state.mode, state.activeGameId, state.cursor, selectCells, isLocked],
   );
 
   const handleContinueGame = async () => {
@@ -627,6 +675,7 @@ export default function GamesPage({ onLogout }) {
       await savedGamesApi.remove(autoSaveData.id);
       setPendingDefaultConfig(null);
       setPendingGameId(null);
+      setPerTurnSeconds(0);
     } catch (error) {
       console.error("Continue failed:", error);
       alert("Load game thất bại!");
@@ -672,6 +721,7 @@ export default function GamesPage({ onLogout }) {
       setSessionFinished(false);
       setGameResult(null);
       setShowContinueDialog(false);
+      setPerTurnSeconds(0);
     } catch (error) {
       console.error("Failed to delete auto-save:", error);
     }
@@ -719,6 +769,7 @@ export default function GamesPage({ onLogout }) {
       setShowDifficultyDialog(false);
       setPendingDefaultConfig(null);
       setPendingGameId(null);
+      setPerTurnSeconds(0);
     } catch (err) {
       console.error("Failed to start caro with difficulty", err);
       alert("Không thể bắt đầu game.");
@@ -734,7 +785,58 @@ export default function GamesPage({ onLogout }) {
     activeGameState?.winScore ?? activeGameState?.win_score ?? null;
 
   useEffect(() => {
-    // auto-invoke AI when active game's turn === "CPU"
+    // reset per-turn counter whenever turn or active game changes
+    setPerTurnSeconds(0);
+  }, [activeGameState?.turn, state.activeGameId]);
+
+  // per-turn timer: only for tictactoe, caro4, caro5 (treat timeLimitSeconds as per-turn)
+  useEffect(() => {
+    if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
+    if (!["caro4", "caro5", "tictactoe"].includes(state.activeGameId)) return;
+    if (!activeGameState) return;
+    if (!activeGameState.turn) return;
+    if (winner) return;
+
+    const limit =
+      activeGameState?.timeLimitSeconds ??
+      activeGameState?.time_limit_seconds ??
+      null;
+    if (!limit || limit <= 0) return;
+
+    let mounted = true;
+    const t = setInterval(() => {
+      if (!mounted) return;
+      setPerTurnSeconds((prev) => {
+        const next = prev + 1;
+        if (next >= limit) {
+          // dispatch timeout for this game's current turn
+          dispatch({
+            type: "GAME",
+            gameId: state.activeGameId,
+            gameAction: { type: "TURN_TIMEOUT" },
+          });
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(t);
+    };
+  }, [
+    state.mode,
+    state.activeGameId,
+    activeGameState?.turn,
+    activeGameState?.timeLimitSeconds,
+    activeGameState?.time_limit_seconds,
+    sessionFinished,
+    winner,
+  ]);
+
+  // auto-invoke AI when active game's turn === "CPU"
+  useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId) return;
     const ag = activeGameState;
     if (!ag) return;
@@ -830,12 +932,26 @@ export default function GamesPage({ onLogout }) {
               heuristic lookahead.
             </div>
             <div>• Chọn ô: di chuyển con trỏ đến ô và nhấn Enter.</div>
+            <div>
+              • Thời gian mỗi nước (per-turn):{" "}
+              {activeGameState?.timeLimitSeconds ??
+                activeGameState?.time_limit_seconds ??
+                "không giới hạn"}{" "}
+              giây
+            </div>
           </>
         );
       case "tictactoe":
         return (
           <>
             <div>• Tic-tac-toe 3x3 ở giữa bàn. Bạn là 'X'.</div>
+            <div>
+              • Thời gian mỗi nước (per-turn):{" "}
+              {activeGameState?.timeLimitSeconds ??
+                activeGameState?.time_limit_seconds ??
+                "không giới hạn"}{" "}
+              giây
+            </div>
           </>
         );
       case "snake":
@@ -911,15 +1027,82 @@ export default function GamesPage({ onLogout }) {
     return null;
   };
 
+  // Allow reset even when locked/finished. Reset restores a fresh initial state
+  // using default_config if available (so new rules apply).
+  const handleResetGame = async () => {
+    const id = state.activeGameId;
+    // If no active game, just do generic reset
+    if (!id) {
+      dispatch({ type: "RESET_GAME" });
+      setTimeSeconds(0);
+      setSessionId(null);
+      setSessionFinished(false);
+      setGameResult(null);
+      setPerTurnSeconds(0);
+      return;
+    }
+
+    try {
+      // Prefer pendingDefaultConfig (if we have it), otherwise fetch game metadata
+      let defaultConfig = pendingDefaultConfig;
+      if (!defaultConfig) {
+        try {
+          const gmResp = await gamesApi.getBySlug(id);
+          const gm = gmResp.game ?? gmResp;
+          defaultConfig = gm?.default_config ?? null;
+        } catch (err) {
+          defaultConfig = null;
+        }
+      }
+
+      if (defaultConfig) {
+        const { init: initialState, boardSize } = buildInitialGameState(
+          id,
+          defaultConfig,
+        );
+        dispatch({
+          type: "SET_MODE",
+          mode: "play",
+          activeGameId: id,
+          boardSize,
+        });
+        dispatch({
+          type: "GAME",
+          gameId: id,
+          gameAction: { type: "RESTORE_STATE", state: initialState },
+        });
+      } else {
+        // fallback to simple reset via reducer
+        dispatch({ type: "RESET_GAME" });
+      }
+
+      // reset UI/session timers/flags
+      setTimeSeconds(0);
+      setPerTurnSeconds(0);
+      setSessionId(null);
+      setSessionFinished(false);
+      setGameResult(null);
+    } catch (err) {
+      console.error("Reset failed, falling back to simple reset:", err);
+      dispatch({ type: "RESET_GAME" });
+      setTimeSeconds(0);
+      setPerTurnSeconds(0);
+      setSessionId(null);
+      setSessionFinished(false);
+      setGameResult(null);
+    }
+  };
+
+  const handleToggleHelp = () => {
+    if (isLocked) return;
+    setShowHelp((v) => !v);
+  };
+
   return (
     <Layout onLogout={onLogout}>
       <div className="space-y-6">
         <div>
           <h1 className="text-4xl font-bold mb-2">Board Games</h1>
-          <p className="text-muted-foreground">
-            1 bàn game cố định cho tất cả trò chơi. Chọn game bằng ô màu trên
-            bàn.
-          </p>
         </div>
 
         <ControlsCard
@@ -930,15 +1113,10 @@ export default function GamesPage({ onLogout }) {
           timeSeconds={timeSeconds}
           timeLimitSeconds={activeTimeLimit}
           winScore={activeWinScore}
-          onResetGame={() => {
-            dispatch({ type: "RESET_GAME" });
-            setTimeSeconds(0);
-            setSessionId(null);
-            setSessionFinished(false);
-            setGameResult(null);
-          }}
+          perTurnSeconds={perTurnSeconds}
+          onResetGame={handleResetGame}
           onBackToSelect={onBack}
-          onToggleHelp={() => setShowHelp((v) => !v)}
+          onToggleHelp={handleToggleHelp}
           helpOn={showHelp}
           pixelColorId={state.pixel.colorId}
           pixelColors={PIXEL_COLORS}
@@ -964,10 +1142,10 @@ export default function GamesPage({ onLogout }) {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 {gameResult === "win"
-                  ? "🏆 Chiến thắng!"
+                  ? "Chiến thắng!"
                   : gameResult === "lose"
-                    ? "😔 Thất bại"
-                    : "🤝 Hòa"}
+                    ? "Thất bại"
+                    : "Hòa"}
               </CardTitle>
             </CardHeader>
             <CardContent>

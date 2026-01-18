@@ -17,17 +17,29 @@ function toIdx(size, r, c) {
 
 function checkWinner(b) {
   const lines = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6],
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6],
   ];
-  for (const [a,b1,c] of lines) if (b[a] && b[a] === b[b1] && b[a] === b[c]) return b[a];
+  for (const [a, b1, c] of lines)
+    if (b[a] && b[a] === b[b1] && b[a] === b[c]) return b[a];
   if (b.every(Boolean)) return "DRAW";
   return null;
 }
 
 export function createTtt({ boardSize }) {
-  return { boardSize, cells: Array.from({ length: 9 }, () => null), winner: null, turn: "HUMAN", score: 0 };
+  return {
+    boardSize,
+    cells: Array.from({ length: 9 }, () => null),
+    winner: null,
+    turn: "HUMAN",
+    score: 0,
+  };
 }
 
 export function stepTtt(state, action) {
@@ -51,7 +63,9 @@ export function stepTtt(state, action) {
 
     if (!s.winner) {
       s.turn = "CPU";
-      const empties = s.cells.map((v, ii) => (v ? null : ii)).filter((x) => x !== null);
+      const empties = s.cells
+        .map((v, ii) => (v ? null : ii))
+        .filter((x) => x !== null);
       if (empties.length) {
         const pick = empties[randInt(empties.length)];
         s.cells[pick] = "O";
@@ -64,6 +78,31 @@ export function stepTtt(state, action) {
     return s;
   }
 
+  // handle when a turn runs out of time
+  if (action.type === "TURN_TIMEOUT") {
+    if (s.winner) return s;
+    if (s.turn === "HUMAN") {
+      s.winner = "O";
+      s.score -= 10;
+      return s;
+    }
+    if (s.turn === "CPU") {
+      const empties = s.cells
+        .map((v, ii) => (v ? null : ii))
+        .filter((x) => x !== null);
+      if (empties.length === 0) return s;
+      const pick = empties[randInt(empties.length)];
+      s.cells[pick] = "O";
+      s.winner = checkWinner(s.cells);
+      if (s.winner === "O") s.score -= 10;
+      if (s.winner === "DRAW") s.score += 20;
+      s.turn = "HUMAN";
+      return s;
+    }
+
+    return s;
+  }
+
   if (action.type === "RESET") return createTtt({ boardSize: s.boardSize });
   return s;
 }
@@ -71,9 +110,7 @@ export function stepTtt(state, action) {
 export function viewTtt({ state, r, c }) {
   const { top, left } = centerTopLeft(state.boardSize);
 
-  const in5 =
-    r >= top - 1 && r <= top + 3 &&
-    c >= left - 1 && c <= left + 3;
+  const in5 = r >= top - 1 && r <= top + 3 && c >= left - 1 && c <= left + 3;
 
   const in3x3 = in3(state.boardSize, r, c);
 
