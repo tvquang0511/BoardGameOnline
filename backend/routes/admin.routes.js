@@ -17,6 +17,9 @@ router.delete('/users/:id', admin.deleteUser);
 // existing stats endpoint (summary)
 router.get("/stats", admin.stats);
 
+// get activity logs
+router.get("/activity", admin.getRecentActivity);
+
 // new detailed admin statistics endpoints
 router.get("/statistics/dau", adminStats.dau);
 router.get("/statistics/sessions-by-hour", adminStats.sessionsByHour);

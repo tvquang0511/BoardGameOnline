@@ -205,7 +205,14 @@ export default function GamesPage({ onLogout }) {
   }, [state.mode, winner, sessionFinished]);
 
   useEffect(() => {
-    if (state.mode !== "play" || state.activeGameId !== "snake") return;
+    if (
+      state.mode !== "play" ||
+      state.activeGameId !== "snake" ||
+      sessionFinished ||
+      gameResult
+    )
+      return;
+
     const ms = state.snake.tickMs || 160;
     const t = setInterval(
       () =>
@@ -217,7 +224,13 @@ export default function GamesPage({ onLogout }) {
       ms,
     );
     return () => clearInterval(t);
-  }, [state.mode, state.activeGameId, state.snake.tickMs]);
+  }, [
+    state.mode,
+    state.activeGameId,
+    state.snake.tickMs,
+    sessionFinished,
+    gameResult,
+  ]);
 
   useEffect(() => {
     if (state.mode !== "play" || state.activeGameId !== "memory") return;
@@ -341,27 +354,25 @@ export default function GamesPage({ onLogout }) {
     if (timeSeconds < limit) return;
     const handleTimeUp = async () => {
       try {
-        setGameResult("lose");
+        const isSnake = state.activeGameId === "snake";
+        const result = isSnake ? "win" : "lose";
+
+        setGameResult(result);
+
         if (sessionId) {
-          try {
-            const response = await sessionsApi.finish(sessionId, {
-              result: "lose",
-              score,
-              duration_seconds: timeSeconds,
-            });
-            console.log(
-              "⏱️ Session finished due to timeout:",
-              response.session.id,
-            );
-          } catch (err) {
-            console.error("Failed to finish session on timeout:", err);
-          }
+          await sessionsApi.finish(sessionId, {
+            result,
+            score,
+            duration_seconds: timeSeconds,
+          });
         }
+
         setSessionFinished(true);
       } catch (err) {
         console.error("Time up handling error:", err);
       }
     };
+
     handleTimeUp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeSeconds, state.mode, state.activeGameId, sessionId, sessionFinished]);
@@ -721,9 +732,6 @@ export default function GamesPage({ onLogout }) {
     null;
   const activeWinScore =
     activeGameState?.winScore ?? activeGameState?.win_score ?? null;
-  const remainingSeconds = activeTimeLimit
-    ? Math.max(0, activeTimeLimit - timeSeconds)
-    : null;
 
   useEffect(() => {
     // auto-invoke AI when active game's turn === "CPU"
@@ -921,7 +929,6 @@ export default function GamesPage({ onLogout }) {
           score={score}
           timeSeconds={timeSeconds}
           timeLimitSeconds={activeTimeLimit}
-          remainingSeconds={remainingSeconds}
           winScore={activeWinScore}
           onResetGame={() => {
             dispatch({ type: "RESET_GAME" });

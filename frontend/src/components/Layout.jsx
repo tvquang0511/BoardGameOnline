@@ -11,11 +11,22 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Layout({ children, onLogout }) {
   const location = useLocation();
+  const { isAdmin, user } = useAuth();
 
-  const navigation = [
+  // fallback check in case useAuth doesn't expose isAdmin but exposes user.role / user.roles
+  const showAdmin =
+    Boolean(isAdmin) ||
+    Boolean(
+      user &&
+      (user.role === "admin" ||
+        (Array.isArray(user.roles) && user.roles.includes("admin"))),
+    );
+
+  const baseNavigation = [
     { name: "Trang chủ", href: "/", icon: Home },
     { name: "Trò chơi", href: "/games", icon: Gamepad2 },
     { name: "Hồ sơ", href: "/profile", icon: User },
@@ -24,6 +35,10 @@ export default function Layout({ children, onLogout }) {
     { name: "Thành tựu", href: "/achievements", icon: Trophy },
     { name: "Xếp hạng", href: "/ranking", icon: BarChart3 },
   ];
+
+  const navigation = showAdmin
+    ? [...baseNavigation, { name: "Admin", href: "/admin", icon: Settings }]
+    : baseNavigation;
 
   return (
     <div className="min-h-screen bg-gray-50">
