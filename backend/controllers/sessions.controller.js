@@ -49,16 +49,23 @@ exports.finish = async (req, res, next) => {
     });
     if (!session) return res.status(404).json({ message: "Session not found" });
 
-    // ensure game_results row is inserted for leaderboard / statistics
-    await db("game_results").insert({
-      user_id: req.user.sub,
-      game_id: session.game_id,
-      session_id: session.id,
-      score,
-      duration_seconds,
-      result,
-      created_at: db.fn.now(),
-    });
+    // Check if game result already exists for this session to prevent duplicates
+    const existingResult = await db("game_results")
+      .where({ session_id: session.id })
+      .first();
+
+    if (!existingResult) {
+      // ensure game_results row is inserted for leaderboard / statistics
+      await db("game_results").insert({
+        user_id: req.user.sub,
+        game_id: session.game_id,
+        session_id: session.id,
+        score,
+        duration_seconds,
+        result,
+        created_at: db.fn.now(),
+      });
+    }
 
     // Award points and update level
     const pointsResult = await Profile.addGamePoints(req.user.sub, {
@@ -76,7 +83,7 @@ exports.finish = async (req, res, next) => {
         result,
         score,
         duration_seconds,
-      }
+      },
     );
 
     res.json({

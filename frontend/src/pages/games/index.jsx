@@ -273,6 +273,7 @@ export default function GamesPage({ onLogout }) {
   // Show game result when winner detected
   useEffect(() => {
     if (!winner || !state.activeGameId) return;
+    console.log("🎯 Winner detected:", winner, "Game:", state.activeGameId);
     const result =
       winner === "X" || winner === "WIN"
         ? "win"
@@ -288,8 +289,18 @@ export default function GamesPage({ onLogout }) {
   // Auto-finish session when game ends
   useEffect(() => {
     if (!winner || !sessionId || !state.activeGameId || sessionFinished) return;
+
+    // Set sessionFinished immediately to prevent multiple calls
+    setSessionFinished(true);
+
     const finishSession = async () => {
       try {
+        console.log(
+          "🎲 Finishing session - Winner:",
+          winner,
+          "Game:",
+          state.activeGameId,
+        );
         const result =
           winner === "X" || winner === "WIN"
             ? "win"
@@ -298,6 +309,7 @@ export default function GamesPage({ onLogout }) {
               : winner === "DRAW"
                 ? "draw"
                 : "draw";
+        console.log("📊 Calculated result:", result, "from winner:", winner);
         const finalScore = score;
         const finalTime = timeSeconds;
         const response = await sessionsApi.finish(sessionId, {
@@ -305,7 +317,6 @@ export default function GamesPage({ onLogout }) {
           score: finalScore,
           duration_seconds: finalTime,
         });
-        setSessionFinished(true);
         console.log(
           "✅ Session finished:",
           response.session.id,
@@ -313,6 +324,8 @@ export default function GamesPage({ onLogout }) {
         );
       } catch (error) {
         console.error("❌ Failed to finish session:", error);
+        // Reset sessionFinished if API call fails
+        setSessionFinished(false);
       }
     };
     finishSession();
@@ -1110,7 +1123,7 @@ export default function GamesPage({ onLogout }) {
                       setReviewDialogOpen(true);
                     }}
                   >
-                    📝 Đánh giá
+                    Đánh giá
                   </Button>
                 </CardContent>
               </Card>
