@@ -38,6 +38,15 @@ export const gamesApi = {
     return http.delete(`/games/${gameId}/reviews`).then((r) => r.data);
   },
 
+  getMyRecentGames({ limit = 20, page = 1 } = {}) {
+    return http
+      .get("/games/me/recent", { params: { limit, page } })
+      .then((r) => r.data);
+  },
+  getMyMostPlayedGame() {
+    return http.get("/games/me/most-played").then((r) => r.data);
+  },
+
   // admin
   create(payload) {
     // POST /api/games
