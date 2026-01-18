@@ -6,19 +6,25 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 
 const routes = require('./routes');
+const { requireApiKey } = require("./middlewares/apiKey.middleware");
+
+// swagger
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./swagger");
 
 const app = express();
 
 // Middleware
 app.use(helmet());
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'development' ? true : ['http://localhost:23346'],
+  origin: process.env.NODE_ENV === 'development' ? true : ['http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Health check
+// Health check (public)
 app.get('/health', (req, res) => {
   res.json({ 
     ok: true,
@@ -26,8 +32,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
-app.use('/api', routes);
+// Swagger docs (public)
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// API routes (protected by x-api-key)
+app.use('/api', requireApiKey, routes);
 
 // 404 handler
 app.use('*', (req, res) => {

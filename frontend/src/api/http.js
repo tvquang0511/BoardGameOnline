@@ -2,6 +2,9 @@ import axios from "axios";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
 
+// NEW: x-api-key from .env (Vite requires VITE_ prefix)
+const API_KEY = import.meta.env.VITE_API_KEY || "";
+
 export const http = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -9,10 +12,18 @@ export const http = axios.create({
   },
 });
 
-// Attach token
+// Attach token + x-api-key
 http.interceptors.request.use((config) => {
+  // 1) API key header
+  // Nếu bạn muốn hard fail ở FE khi quên cấu hình env thì có thể throw Error ở đây.
+  if (API_KEY) {
+    config.headers["x-api-key"] = API_KEY;
+  }
+
+  // 2) JWT token header
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
   return config;
 });
 
@@ -21,7 +32,6 @@ http.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err?.response?.status === 401) {
-      // token invalid/expired
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     }
