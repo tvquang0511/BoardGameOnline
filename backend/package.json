@@ -27,7 +27,8 @@
     "pg": "^8.11.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "validator": "^13.15.26"
+    "validator": "^13.15.26",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "node-fetch": "^2.6.12",

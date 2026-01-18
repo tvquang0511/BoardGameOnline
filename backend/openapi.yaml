@@ -1,0 +1,1522 @@
+openapi: 3.0.0
+info:
+  title: Game Platform API
+  version: 1.0.0
+  description: |
+    API docs for backend.
+    Security:
+    - All /api endpoints require x-api-key (apiKeyAuth)
+    - Many endpoints also require JWT Bearer token (bearerAuth)
+servers:
+  - url: http://localhost:3000/api
+    description: Local
+
+tags:
+  - name: Auth
+  - name: Profiles
+  - name: Games
+  - name: Sessions
+  - name: SavedGames
+  - name: Friends
+  - name: Messages
+  - name: Achievements
+  - name: Leaderboard
+  - name: Admin
+  - name: Users
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        role: { type: string, enum: [user, admin] }
+        is_enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time, nullable: true }
+
+    Profile:
+      type: object
+      properties:
+        user_id: { type: integer }
+        username: { type: string }
+        display_name: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true }
+        bio: { type: string, nullable: true }
+        level: { type: integer }
+        points: { type: integer }
+        settings: { type: object }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Game:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive, maintenance] }
+        default_config: { type: object }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Session:
+      type: object
+      properties:
+        id: { type: integer }
+        game_id: { type: integer }
+        user_id: { type: integer }
+        mode: { type: string, enum: [ai, casual, ranked] }
+        status: { type: string, enum: [playing, finished, abandoned] }
+        score: { type: integer }
+        duration_seconds: { type: integer }
+        state: { type: object }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SavedGame:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        game_id: { type: integer }
+        session_id: { type: integer, nullable: true }
+        name: { type: string, nullable: true }
+        data: { type: object }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Achievement:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        rarity: { type: string, nullable: true }
+        points: { type: integer }
+        criteria: { type: object }
+        icon: { type: string, nullable: true }
+        color: { type: string, nullable: true }
+        category: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    UserAchievement:
+      type: object
+      properties:
+        progress: { type: integer }
+        unlocked_at: { type: string, format: date-time, nullable: true }
+
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        sender_id: { type: integer }
+        receiver_id: { type: integer }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+        is_deleted: { type: boolean }
+
+    FriendRelation:
+      type: object
+      properties:
+        id: { type: integer }
+        requester_id: { type: integer }
+        addressee_id: { type: integer }
+        user_low_id: { type: integer }
+        user_high_id: { type: integer }
+        status: { type: string, enum: [pending, accepted, rejected, blocked] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+
+security:
+  - apiKeyAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: user@example.com }
+                password: { type: string, example: "123456" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      email: { type: string }
+                      role: { type: string }
+                  token: { type: string }
+                  session:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: integer, nullable: true }
+        "400":
+          description: Invalid email/password required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Account disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string, minLength: 6 }
+                username: { type: string, nullable: true }
+                display_name: { type: string, nullable: true }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      email: { type: string }
+                      role: { type: string }
+                  token: { type: string }
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (end auth sessions)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "401":
+          description: Missing/invalid token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user + profile
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  profile: { $ref: "#/components/schemas/Profile" }
+        "401":
+          description: Missing/invalid token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /profiles/me:
+    get:
+      tags: [Profiles]
+      summary: Get my profile
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile: { $ref: "#/components/schemas/Profile" }
+    patch:
+      tags: [Profiles]
+      summary: Update my profile
+      description: Allowed fields: display_name, bio, avatar_url, settings, level, points
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, maxLength: 50 }
+                bio: { type: string, maxLength: 500 }
+                avatar_url: { type: string, nullable: true }
+                settings: { type: object }
+                level: { type: integer }
+                points: { type: integer }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile: { $ref: "#/components/schemas/Profile" }
+        "400":
+          description: Invalid avatar URL / validation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /profiles/me/stats:
+    get:
+      tags: [Profiles]
+      summary: My stats
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    properties:
+                      total_games: { type: integer }
+                      wins: { type: integer }
+                      loses: { type: integer }
+                      draws: { type: integer }
+                      best_score: { type: integer }
+                      win_rate: { type: number }
+
+  /profiles/me/top-achievements:
+    get:
+      tags: [Profiles]
+      summary: My top unlocked achievements
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 4 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  achievements:
+                    type: array
+                    items: { $ref: "#/components/schemas/Achievement" }
+
+  /profiles/me/favorite-games:
+    get:
+      tags: [Profiles]
+      summary: My favorite games
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 4 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  games:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        plays: { type: integer }
+                        wins: { type: integer }
+                        win_rate: { type: string, example: "75%" }
+
+  /games:
+    get:
+      tags: [Games]
+      summary: List games
+      parameters:
+        - in: query
+          name: all
+          schema: { type: string, enum: ["true", "false"] }
+          description: If true returns all games, else only active/maintenance
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  games:
+                    type: array
+                    items: { $ref: "#/components/schemas/Game" }
+    post:
+      tags: [Games]
+      summary: Create game (admin)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name]
+              properties:
+                slug: { type: string }
+                name: { type: string }
+                description: { type: string, nullable: true }
+                status: { type: string, enum: [active, inactive, maintenance], default: active }
+                default_config: { type: object }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  game: { $ref: "#/components/schemas/Game" }
+        "403":
+          description: Admin only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /games/{slug}:
+    get:
+      tags: [Games]
+      summary: Get game by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  game: { $ref: "#/components/schemas/Game" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /games/{id}:
+    patch:
+      tags: [Games]
+      summary: Update game (admin)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug: { type: string }
+                name: { type: string }
+                description: { type: string, nullable: true }
+                status: { type: string, enum: [active, inactive, maintenance] }
+                default_config: { type: object }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  game: { $ref: "#/components/schemas/Game" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /sessions/start:
+    post:
+      tags: [Sessions]
+      summary: Start a game session
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameSlug]
+              properties:
+                gameSlug: { type: string }
+                mode: { type: string, enum: [ai, casual, ranked], default: ai }
+                state: { type: object }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session: { $ref: "#/components/schemas/Session" }
+                  game: { $ref: "#/components/schemas/Game" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /sessions/{id}:
+    get:
+      tags: [Sessions]
+      summary: Get session by id
+      description: Allowed if session belongs to user OR user is admin
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session: { $ref: "#/components/schemas/Session" }
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /sessions/{id}/state:
+    patch:
+      tags: [Sessions]
+      summary: Update session state
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state: { type: object }
+                score: { type: integer }
+                duration_seconds: { type: integer }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session: { $ref: "#/components/schemas/Session" }
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /sessions/{id}/finish:
+    post:
+      tags: [Sessions]
+      summary: Finish session (create game_result, award points, unlock achievements)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                result: { type: string, enum: [win, lose, draw], default: win }
+                score: { type: integer, default: 0 }
+                duration_seconds: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session: { $ref: "#/components/schemas/Session" }
+                  achievements_unlocked:
+                    type: array
+                    items: { $ref: "#/components/schemas/Achievement" }
+                  points_earned: { type: integer }
+                  level_up: { type: boolean }
+                  new_level: { type: integer }
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /sessions/statistics/sessions-by-hour:
+    get:
+      tags: [Sessions]
+      summary: Sessions by hour (last N hours, default 24) - finished sessions only
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: hours
+          schema: { type: integer, default: 24, minimum: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hours:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hour: { type: integer }
+                        count: { type: integer }
+
+  /saved-games:
+    get:
+      tags: [SavedGames]
+      summary: List saved games for current user
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: gameSlug
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved:
+                    type: array
+                    items: { $ref: "#/components/schemas/SavedGame" }
+    post:
+      tags: [SavedGames]
+      summary: Create saved game
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameSlug, data]
+              properties:
+                gameSlug: { type: string }
+                sessionId: { type: integer, nullable: true }
+                name: { type: string, nullable: true }
+                data: { type: object }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved: { $ref: "#/components/schemas/SavedGame" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /saved-games/{id}:
+    get:
+      tags: [SavedGames]
+      summary: Get saved game by id (must belong to user)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved: { $ref: "#/components/schemas/SavedGame" }
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Saved game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [SavedGames]
+      summary: Delete saved game (must belong to user)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "404":
+          description: Saved game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /friends:
+    get:
+      tags: [Friends]
+      summary: List accepted friends (paginated)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, maximum: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friends:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        friendship_id: { type: integer }
+                        user_id: { type: integer }
+                        id: { type: integer }
+                        email: { type: string }
+                        username: { type: string }
+                        display_name: { type: string }
+                        avatar_url: { type: string }
+                        level: { type: integer }
+                        points: { type: integer }
+                        bio: { type: string, nullable: true }
+                        created_at: { type: string, format: date-time }
+                        updated_at: { type: string, format: date-time }
+                        status: { type: string }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+
+  /friends/requests:
+    get:
+      tags: [Friends]
+      summary: Incoming friend requests (paginated)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, maximum: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        friendship_id: { type: integer }
+                        requester_id: { type: integer }
+                        user_id: { type: integer }
+                        status: { type: string }
+                        created_at: { type: string, format: date-time }
+                        updated_at: { type: string, format: date-time }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+
+  /friends/outgoing:
+    get:
+      tags: [Friends]
+      summary: Outgoing friend requests (paginated)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, maximum: 50 }
+      responses:
+        "200":
+          description: OK
+
+  /friends/suggestions:
+    get:
+      tags: [Friends]
+      summary: Friend suggestions (exclude existing relations + self)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, maximum: 50 }
+      responses:
+        "200":
+          description: OK
+
+  /friends/request:
+    post:
+      tags: [Friends]
+      summary: Send friend request
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: integer }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friend: { $ref: "#/components/schemas/FriendRelation" }
+        "400":
+          description: Invalid / already sent / already received / already friends
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /friends/{id}/accept:
+    post:
+      tags: [Friends]
+      summary: Accept friend request
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friend: { $ref: "#/components/schemas/FriendRelation" }
+                  achievements_unlocked:
+                    type: array
+                    items: { $ref: "#/components/schemas/Achievement" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /friends/{id}/reject:
+    post:
+      tags: [Friends]
+      summary: Reject friend request
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+
+  /friends/{id}/cancel:
+    delete:
+      tags: [Friends]
+      summary: Cancel outgoing friend request
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+
+  /friends/{id}/unfriend:
+    delete:
+      tags: [Friends]
+      summary: Unfriend (delete accepted relation)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /messages/contacts:
+    get:
+      tags: [Messages]
+      summary: List contacts (friends) with last message + unread count
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        "200":
+          description: OK
+
+  /messages:
+    get:
+      tags: [Messages]
+      summary: List messages with a user (must be friends)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: with
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Not friends
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    post:
+      tags: [Messages]
+      summary: Send message (must be friends)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiverId, content]
+              properties:
+                receiverId: { type: integer }
+                content: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "403":
+          description: Not friends
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /messages/{id}/read:
+    post:
+      tags: [Messages]
+      summary: Mark message as read
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Message not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /achievements:
+    get:
+      tags: [Achievements]
+      summary: Achievements catalog (public, no JWT needed)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  achievements:
+                    type: array
+                    items: { $ref: "#/components/schemas/Achievement" }
+
+  /achievements/me:
+    get:
+      tags: [Achievements]
+      summary: My achievements (joined with user_achievements)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /achievements/progress:
+    get:
+      tags: [Achievements]
+      summary: My achievements with progress calculation
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /achievements/recheck:
+    post:
+      tags: [Achievements]
+      summary: Recheck all achievements (retroactive unlock)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  unlocked_count: { type: integer }
+                  achievements:
+                    type: array
+                    items: { $ref: "#/components/schemas/Achievement" }
+
+  /leaderboard:
+    get:
+      tags: [Leaderboard]
+      summary: Get leaderboard
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: gameSlug
+          required: true
+          schema: { type: string }
+        - in: query
+          name: scope
+          schema: { type: string, enum: [global, me, friends], default: global }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10, maximum: 100 }
+        - in: query
+          name: range
+          schema: { type: string, enum: [7d, 30d] }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time, nullable: true }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time, nullable: true }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: gameSlug required / invalid scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Admin list users (with profile attached)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, default: "" }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: OK
+    post:
+      tags: [Admin]
+      summary: Admin create user
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string, minLength: 6 }
+                display_name: { type: string }
+      responses:
+        "201":
+          description: Created
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /admin/users/{id}:
+    patch:
+      tags: [Admin]
+      summary: Admin update user (user + profile)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string, minLength: 6 }
+                display_name: { type: string }
+                is_enabled: { type: boolean }
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [Admin]
+      summary: Admin delete user
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Admin summary stats
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /admin/activity:
+    get:
+      tags: [Admin]
+      summary: Admin recent activity (auth + game union)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, default: "" }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: type
+          schema: { type: string, enum: [all, auth, game], default: all }
+      responses:
+        "200":
+          description: OK
+
+  /admin/statistics/dau:
+    get:
+      tags: [Admin]
+      summary: DAU by day
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: days
+          schema: { type: integer, default: 7, minimum: 1 }
+      responses:
+        "200":
+          description: OK
+
+  /admin/statistics/sessions-by-hour:
+    get:
+      tags: [Admin]
+      summary: Sessions by hour (auth + finished game sessions, last 24h)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /admin/statistics/game-distribution:
+    get:
+      tags: [Admin]
+      summary: Game distribution (finished sessions per game)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /admin/statistics/user-growth:
+    get:
+      tags: [Admin]
+      summary: User growth by month
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: months
+          schema: { type: integer, default: 6, minimum: 1 }
+      responses:
+        "200":
+          description: OK
+
+  /admin/games/{id}:
+    patch:
+      tags: [Admin]
+      summary: Admin update game (safe fields)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                status: { type: string, enum: [active, inactive, maintenance] }
+                default_config: { type: object }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: No updatable fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /users/search:
+    get:
+      tags: [Users]
+      summary: Search users (join profiles)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        email: { type: string }
+                        username: { type: string }
+                        display_name: { type: string }
+                        avatar_url: { type: string }
+                        level: { type: integer }
+                        points: { type: integer }
+                        bio: { type: string, nullable: true }
+                        role: { type: string }
+                        is_enabled: { type: boolean }
+                        created_at: { type: string, format: date-time }
