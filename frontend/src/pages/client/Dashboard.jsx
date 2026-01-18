@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Trophy, Star, Target, Zap } from "lucide-react";
+import { Trophy, Star, Target, Zap, Gamepad2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { profilesApi } from "../../api/profiles.api";
@@ -48,9 +48,9 @@ export default function Dashboard({ onLogout }) {
         color: "from-yellow-400 to-orange-500",
       },
       {
-        name: "Thắng liên tiếp",
+        name: "Trò chơi ưa thích",
         value: "8",
-        icon: Trophy,
+        icon: Gamepad2,
         color: "from-blue-400 to-blue-600",
       }, // TODO(API MISSING): streak
       {
@@ -62,7 +62,7 @@ export default function Dashboard({ onLogout }) {
       {
         name: "Hạng",
         value: "#42",
-        icon: Zap,
+        icon: Trophy,
         color: "from-purple-400 to-purple-600",
       }, // TODO(API MISSING): rank
     ];

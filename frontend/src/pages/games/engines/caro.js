@@ -241,7 +241,7 @@ function minimaxAB(
   beta,
   maximizing,
   startTime,
-  timeLimitMs
+  timeLimitMs,
 ) {
   const AI = "O",
     HUMAN = "X";
@@ -286,7 +286,7 @@ function minimaxAB(
         beta,
         false,
         startTime,
-        timeLimitMs
+        timeLimitMs,
       );
       board[m] = null;
       const sc = res.score;
@@ -313,7 +313,7 @@ function minimaxAB(
         beta,
         true,
         startTime,
-        timeLimitMs
+        timeLimitMs,
       );
       board[m] = null;
       const sc = res.score;
@@ -361,10 +361,10 @@ function localPick(board, size, winLen, level = "medium") {
         ? 36
         : 40
       : level === "medium"
-      ? winLen <= 4
-        ? 28
-        : 30
-      : 18;
+        ? winLen <= 4
+          ? 28
+          : 30
+        : 18;
   const candidates = generateCandidateMoves(board, size, winLen, {
     radius,
     maxCandidates,
@@ -429,7 +429,7 @@ function localPick(board, size, winLen, level = "medium") {
         Infinity,
         false,
         start,
-        timeLimitMs
+        timeLimitMs,
       );
       board[m] = null;
       const sc = res.score + (oppFork ? -1e6 : 0); // penalize if opponent gets fork
@@ -467,7 +467,7 @@ function localPick(board, size, winLen, level = "medium") {
         Infinity,
         true,
         start,
-        TIME_LIMIT_MS
+        TIME_LIMIT_MS,
       );
       if (Date.now() - start > TIME_LIMIT_MS) break;
       if (res && typeof res.move !== "undefined" && res.move !== null)
@@ -504,6 +504,46 @@ export function stepCaro(state, action) {
     if (!s.winner) {
       s.turn = "CPU";
     }
+    return s;
+  }
+
+  // handle turn timeout: if human timed out -> auto human move; if CPU timed out -> do CPU fallback
+  if (action.type === "TURN_TIMEOUT") {
+    if (s.winner) return s;
+    const AI = "O";
+    if (s.turn === "HUMAN") {
+      s.winner = "O";
+      s.score -= 10;
+      return s;
+    }
+
+    // CPU timeout: perform CPU move fallback (reuse CPU_MOVE logic)
+    if (s.turn === "CPU") {
+      const empties = getEmptyIndices(s.board);
+      let pick = null;
+      if (action.index !== undefined && action.index !== null) {
+        if (s.board[action.index] == null) pick = action.index;
+      }
+      if (pick === null) {
+        const level = s.aiLevel ?? s.ai_level ?? "medium";
+        pick = localPick(s.board, s.boardSize, s.winLen, level);
+      }
+      if (pick === null || s.board[pick]) {
+        const empt = s.board
+          .map((v, ii) => (v ? null : ii))
+          .filter((x) => x !== null);
+        if (empt.length === 0) return s;
+        pick = empt[Math.floor(Math.random() * empt.length)];
+      }
+
+      s.board[pick] = AI;
+      s.winner = checkWinner(s.board, s.boardSize, s.winLen);
+      if (s.winner === "O") s.score -= 10;
+      if (s.winner === "DRAW") s.score += 20;
+      s.turn = "HUMAN";
+      return s;
+    }
+
     return s;
   }
 

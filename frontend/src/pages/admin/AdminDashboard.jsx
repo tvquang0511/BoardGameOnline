@@ -367,7 +367,7 @@ export default function AdminDashboard({ onLogout }) {
                             {activity.ended_at && (
                               <>
                                 {" "}
-                                • Kết thúc:{" "}
+                                - Kết thúc:{" "}
                                 {new Date(activity.ended_at).toLocaleString(
                                   "vi-VN",
                                 )}
