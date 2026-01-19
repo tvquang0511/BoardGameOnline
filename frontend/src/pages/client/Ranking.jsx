@@ -18,15 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Trophy,
-  Medal,
-  Award,
-  ChevronLeft,
-  ChevronRight,
-  Users,
-  Globe,
-  User,
-} from "lucide-react";
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import { Trophy, Medal, Award, Users, Globe, User } from "lucide-react";
 import { leaderboardApi } from "../../api/leaderboard.api";
 import { gamesApi } from "../../api/games.api";
 
@@ -40,7 +40,7 @@ export default function Ranking({ onLogout }) {
   const [myStats, setMyStats] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 20,
+    limit: 10,
     total: 0,
     totalPages: 0,
   });
@@ -137,8 +137,8 @@ export default function Ranking({ onLogout }) {
           player.is_current_user
             ? "bg-blue-50 border-2 border-blue-400"
             : isTopThree
-            ? "bg-gradient-to-r " + getRankColor(player.rank) + " text-white"
-            : "bg-gray-50 hover:bg-gray-100"
+              ? "bg-gradient-to-r " + getRankColor(player.rank) + " text-white"
+              : "bg-gray-50 hover:bg-gray-100"
         }`}
       >
         <div className="flex items-center gap-4 flex-1">
@@ -187,8 +187,8 @@ export default function Ranking({ onLogout }) {
               player.is_current_user
                 ? "text-blue-600"
                 : isTopThree
-                ? "text-white"
-                : "text-blue-600"
+                  ? "text-white"
+                  : "text-blue-600"
             }`}
           >
             {(player.total_score !== undefined
@@ -202,8 +202,8 @@ export default function Ranking({ onLogout }) {
             }`}
           >
             {player.total_score !== undefined
-              ? "tổng điểm game"
-              : "điểm tích lũy"}
+              ? "Tổng điểm game"
+              : "Điểm tích lũy"}
           </p>
         </div>
       </div>
@@ -368,36 +368,79 @@ export default function Ranking({ onLogout }) {
                   <div className="space-y-3">
                     {leaderboard.map(renderPlayerRow)}
                   </div>
-
                   {/* Pagination */}
-                  {pagination.totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-6 pt-4 border-t">
-                      <p className="text-sm text-gray-600">
-                        Trang {pagination.page} / {pagination.totalPages} (
-                        {pagination.total} người chơi)
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={pagination.page <= 1}
-                          onClick={() => handlePageChange(pagination.page - 1)}
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                          Trước
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={pagination.page >= pagination.totalPages}
-                          onClick={() => handlePageChange(pagination.page + 1)}
-                        >
-                          Sau
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex flex-col items-center gap-4 mt-6 pt-4 border-t">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              pagination.page > 1 &&
+                              handlePageChange(pagination.page - 1)
+                            }
+                            className={
+                              pagination.page <= 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {Array.from(
+                          { length: pagination.totalPages },
+                          (_, i) => i + 1,
+                        ).map((page) => {
+                          // Show first page, last page, current page, and pages around current
+                          const showPage =
+                            page === 1 ||
+                            page === pagination.totalPages ||
+                            Math.abs(page - pagination.page) <= 1;
+
+                          const showEllipsisBefore =
+                            page === pagination.page - 2 && pagination.page > 3;
+                          const showEllipsisAfter =
+                            page === pagination.page + 2 &&
+                            pagination.page < pagination.totalPages - 2;
+
+                          if (showEllipsisBefore || showEllipsisAfter) {
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            );
+                          }
+
+                          if (!showPage) return null;
+
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => handlePageChange(page)}
+                                isActive={page === pagination.page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              pagination.page < pagination.totalPages &&
+                              handlePageChange(pagination.page + 1)
+                            }
+                            className={
+                              pagination.page >= pagination.totalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
                 </>
               )}
             </CardContent>
