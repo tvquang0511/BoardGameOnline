@@ -77,3 +77,12 @@ exports.favoriteGames = async (req, res, next) => {
     next(e);
   }
 };
+
+exports.myGlobalRank = async (req, res, next) => {
+  try {
+    const rank = await Profile.getGlobalRank(req.user.sub);
+    res.json({ rank });
+  } catch (e) {
+    next(e);
+  }
+};

@@ -19,6 +19,7 @@ export default function Dashboard({ onLogout }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [myAchievements, setMyAchievements] = useState([]);
+  const [globalRank, setGlobalRank] = useState(null);
 
   // recent games (infinite scroll)
   const [recentGames, setRecentGames] = useState([]);
@@ -35,13 +36,15 @@ export default function Dashboard({ onLogout }) {
     let mounted = true;
     (async () => {
       try {
-        const [p, a] = await Promise.all([
+        const [p, a, r] = await Promise.all([
           profilesApi.me(),
           achievementsApi.my(),
+          profilesApi.myGlobalRank(),
         ]);
         if (!mounted) return;
         setProfile(p.profile);
         setMyAchievements(a.achievements || []);
+        setGlobalRank(r.rank);
       } catch {
         // TODO(API): error state
       }
@@ -145,12 +148,12 @@ export default function Dashboard({ onLogout }) {
       },
       {
         name: "Hạng",
-        value: "#42",
+        value: globalRank ? `#${globalRank}` : "#--",
         icon: Trophy,
         color: "from-purple-400 to-purple-600",
       },
     ];
-  }, [profile, unlockedCount, mostPlayed, mostPlayedLoading]);
+  }, [profile, unlockedCount, mostPlayed, mostPlayedLoading, globalRank]);
 
   return (
     <Layout onLogout={onLogout}>

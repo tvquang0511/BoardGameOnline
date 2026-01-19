@@ -2,6 +2,7 @@ import React from "react";
 import { Route, Navigate } from "react-router-dom";
 
 import Dashboard from "../pages/client/Dashboard";
+import GameSelection from "../pages/client/GameSelection";
 
 import GamesPage from "../pages/games";
 import Profile from "../pages/client/Profile";
