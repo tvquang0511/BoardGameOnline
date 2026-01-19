@@ -30,7 +30,6 @@ const EMOJI_BY_SLUG = {
   snake: "🐍",
   match3: "💎",
   candy: "🍬",
-  sudoku: "🔢",
 };
 
 export default function GameManagement({ onLogout }) {
@@ -91,34 +90,6 @@ export default function GameManagement({ onLogout }) {
         return <Badge className="bg-yellow-500">Bảo trì</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getDifficultyBadge = (difficulty) => {
-    switch (difficulty) {
-      case "easy":
-        return (
-          <Badge variant="outline" className="border-green-500 text-green-700">
-            Dễ
-          </Badge>
-        );
-      case "medium":
-        return (
-          <Badge
-            variant="outline"
-            className="border-yellow-500 text-yellow-700"
-          >
-            Trung bình
-          </Badge>
-        );
-      case "hard":
-        return (
-          <Badge variant="outline" className="border-red-500 text-red-700">
-            Khó
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{difficulty}</Badge>;
     }
   };
 
@@ -216,7 +187,6 @@ export default function GameManagement({ onLogout }) {
                         <h3 className="text-lg font-semibold">{game.name}</h3>
                         <div className="flex items-center gap-2 mt-1">
                           {getStatusBadge(game.status)}
-                          {getDifficultyBadge(game.difficulty)}
                         </div>
                       </div>
                     </div>
@@ -229,12 +199,6 @@ export default function GameManagement({ onLogout }) {
                       <p className="font-semibold">
                         {game.players.toLocaleString()}{" "}
                         {/* TODO(API MISSING) */}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">TB thời gian</p>
-                      <p className="font-semibold">
-                        {game.avgTime} {/* TODO(API MISSING) */}
                       </p>
                     </div>
                   </div>

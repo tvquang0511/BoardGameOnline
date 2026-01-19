@@ -103,13 +103,6 @@ export default function AdminDashboard({ onLogout }) {
         icon: Activity,
         color: "from-purple-400 to-purple-600",
       },
-      {
-        name: "Tỷ lệ tăng trưởng",
-        value: "—",
-        change: "—",
-        icon: TrendingUp,
-        color: "from-orange-400 to-orange-600",
-      }, // TODO(API MISSING)
     ];
   }, [statsResp]);
 
@@ -186,7 +179,7 @@ export default function AdminDashboard({ onLogout }) {
           <p className="text-gray-600">Tổng quan hệ thống</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           {stats.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -327,7 +320,7 @@ export default function AdminDashboard({ onLogout }) {
                             </Badge>
                             {activity.type === "game" && activity.game_name && (
                               <Badge variant="outline">
-                                🎯 {activity.game_name}
+                                {activity.game_name}
                               </Badge>
                             )}
                           </div>
