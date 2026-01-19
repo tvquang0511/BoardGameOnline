@@ -97,7 +97,7 @@ export default function Profile({ onLogout }) {
   const avatar =
     me?.profile?.avatar_url ||
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-      username || email
+      username || email,
     )}`;
   const level = me?.profile?.level ?? 1;
   const points = me?.profile?.points ?? 0;
@@ -130,10 +130,7 @@ export default function Profile({ onLogout }) {
                   </Avatar>
                 </div>
                 <div className="mt-4 text-center">
-                  <Badge
-                    variant="default"
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                  >
+                  <Badge variant="default" className="bg-blue-600 text-white">
                     Level {level}
                   </Badge>
                   <div className="mt-2 text-sm text-gray-500">
@@ -279,7 +276,7 @@ export default function Profile({ onLogout }) {
                       className="flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
+                        <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold">
                           {index + 1}
                         </div>
                         <div>
