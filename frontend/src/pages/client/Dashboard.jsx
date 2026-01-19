@@ -225,7 +225,7 @@ export default function Dashboard({ onLogout }) {
                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium text-gray-900">
                       {game.game_name || game.game?.name || "Không rõ"}
                     </p>
                     <p className="text-sm text-gray-500">
