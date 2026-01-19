@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./components/ui/toast-provider";
 import AppRoutes from "./routes/AppRoutes";
 import { authApi } from "./api/auth.api";
+import { ThemeProvider } from "./context/ThemeContext";
 
 function AppInner() {
   const auth = useAuth();
@@ -25,12 +26,14 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <AppInner />
-        </BrowserRouter>
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppInner />
+          </BrowserRouter>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

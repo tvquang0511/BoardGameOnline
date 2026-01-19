@@ -1175,7 +1175,7 @@ export default function GamesPage({ onLogout }) {
           </Card>
         )}
 
-        <Card className="bg-white">
+        <Card className="bg-card text-card-foreground border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               {state.mode === "select"

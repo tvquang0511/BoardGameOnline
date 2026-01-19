@@ -1,49 +1,59 @@
-require('dotenv').config();
+require("dotenv").config();
 
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-const helmet = require('helmet');
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const helmet = require("helmet");
 
-const routes = require('./routes');
+const routes = require("./routes");
+const { requireApiKey } = require("./middlewares/apiKey.middleware");
+
+// Swagger
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
+const swaggerDocument = YAML.load("./openapi.yaml");
 
 const app = express();
 
-// Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'development' ? true : ['http://localhost:23346'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.NODE_ENV === "development" ? true : ["http://localhost:23346"],
+    credentials: true,
+  })
+);
 app.use(express.json());
-app.use(morgan('dev'));
+app.use(morgan("dev"));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ 
+// Health check (public)
+app.get("/health", (req, res) => {
+  res.json({
     ok: true,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// API routes
-app.use('/api', routes);
+// Swagger docs (public)
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// API routes (require x-api-key)
+app.use("/api", requireApiKey, routes);
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+app.use("*", (req, res) => {
+  res.status(404).json({ message: "Route not found" });
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  
+  console.error("Error:", err.message);
+
   const status = err.status || 500;
-  const message = err.message || 'Internal Server Error';
-  
+  const message = err.message || "Internal Server Error";
+
   res.status(status).json({
     message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 });
 
