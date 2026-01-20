@@ -9,8 +9,10 @@ export const http = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
+    "x-api-key": API_KEY,
   },
   withCredentials: true,
+
 });
 
 // Attach token + x-api-key
