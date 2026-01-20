@@ -16,19 +16,20 @@ const swaggerDocument = YAML.load("./openapi.yaml");
 const app = express();
 
 app.use(helmet());
+
 app.use(cors({
   origin: [
-    "https://board-game-online-git-completecode-vuquangs-projects-2943ee1c.vercel.app/",
-    "https://board-game-online.vercel.app", // nếu có prod
+    "https://board-game-online-git-completecode-vuquangs-projects-2943ee1c.vercel.app",
+    "https://board-game-online.vercel.app",
     "http://localhost:5173"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-
   allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
   credentials: true
 }));
 
-
+// 🔥 BẮT BUỘC cho CORS preflight
+app.options("*", cors());
 
 app.use(express.json());
 app.use(morgan("dev"));
@@ -44,7 +45,7 @@ app.get("/health", (req, res) => {
 // Swagger docs (public)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// API routes (require x-api-key)
+// API routes (BẢO VỆ BẰNG API KEY)
 app.use("/api", requireApiKey, routes);
 
 // 404 handler

@@ -1,7 +1,12 @@
 function requireApiKey(req, res, next) {
+  // 🔥 QUAN TRỌNG: cho phép preflight CORS đi qua
+  if (req.method === "OPTIONS") {
+    return next();
+  }
+
   const expected = process.env.API_KEY;
 
-  // Nếu chưa cấu hình API_KEY thì fail fast để tránh chạy "không bảo vệ"
+  // Fail fast nếu thiếu API_KEY
   if (!expected) {
     return res.status(500).json({ message: "Server missing API_KEY env" });
   }
@@ -12,7 +17,6 @@ function requireApiKey(req, res, next) {
     return res.status(401).json({ message: "Missing x-api-key" });
   }
 
-  // So sánh đơn giản. (Nếu muốn chống timing attack có thể đổi sang crypto.timingSafeEqual)
   if (provided !== expected) {
     return res.status(403).json({ message: "Invalid x-api-key" });
   }
