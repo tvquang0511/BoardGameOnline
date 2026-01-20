@@ -18,7 +18,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: [
-    "https://board-game-online-q61zso1oi-vuquangs-projects-2943ee1c.vercel.app",
+    "https://board-game-online-git-completecode-vuquangs-projects-2943ee1c.vercel.app/",
     "https://board-game-online.vercel.app", // nếu có prod
     "http://localhost:5173"
   ],
