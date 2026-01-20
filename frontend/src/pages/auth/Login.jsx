@@ -5,11 +5,24 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Gamepad2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useAuth } from "../../context/AuthContext";
 import { authApi } from "../../api/auth.api";
 
@@ -30,20 +43,25 @@ export default function Login() {
 
   const onSubmit = async (values) => {
     try {
-      const data = await authApi.login({ email: values.email, password: values.password });
+      const data = await authApi.login({
+        email: values.email,
+        password: values.password,
+      });
       await auth.login({ user: data.user, token: data.token });
       navigate(data.user?.role === "admin" ? "/admin" : "/");
     } catch (err) {
-      form.setError("root", { message: err?.response?.data?.message || "Đăng nhập thất bại" });
+      form.setError("root", {
+        message: err?.response?.data?.message || "Đăng nhập thất bại",
+      });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-blue-400 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-full">
+            <div className="bg-blue-500 p-4 rounded-full">
               <Gamepad2 className="w-12 h-12 text-white" />
             </div>
           </div>
@@ -55,7 +73,9 @@ export default function Login() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {form.formState.errors.root?.message ? (
-                <div className="text-sm text-red-600">{form.formState.errors.root.message}</div>
+                <div className="text-sm text-red-600">
+                  {form.formState.errors.root.message}
+                </div>
               ) : null}
 
               <FormField
@@ -65,7 +85,11 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" type="email" {...field} />
+                      <Input
+                        placeholder="your@email.com"
+                        type="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -79,7 +103,11 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Mật khẩu</FormLabel>
                     <FormControl>
-                      <Input placeholder="••••••••" type="password" {...field} />
+                      <Input
+                        placeholder="••••••••"
+                        type="password"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -108,18 +136,26 @@ export default function Login() {
                 />
               </div>
 
-              <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-600" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+              <Button
+                type="submit"
+                className="w-full bg-blue-500"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting
+                  ? "Đang đăng nhập..."
+                  : "Đăng nhập"}
               </Button>
 
               <div className="text-center space-y-2">
                 <p className="text-sm text-gray-600">
                   Chưa có tài khoản?{" "}
-                  <Link to="/register" className="text-blue-600 hover:underline">
+                  <Link
+                    to="/register"
+                    className="text-blue-600 hover:underline"
+                  >
                     Đăng ký ngay
                   </Link>
                 </p>
-                <p className="text-xs text-gray-500 italic">Gợi ý: admin@game.com / 123456 (seed)</p>
               </div>
             </form>
           </Form>

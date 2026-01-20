@@ -109,7 +109,6 @@ function reducer(state, action) {
 
     if (gameAction.type === "RESTORE_STATE") {
       s[gameId] = JSON.parse(JSON.stringify(gameAction.state));
-      console.log("📦 RESTORE_STATE:", gameId, s[gameId]);
       return s;
     }
 
@@ -287,7 +286,6 @@ export default function GamesPage({ onLogout }) {
           state: state[state.activeGameId],
         });
         setSessionId(result.session.id);
-        console.log("🎮 Session started:", result.session.id);
       } catch (error) {
         console.error("❌ Failed to start session:", error);
       }
@@ -298,7 +296,6 @@ export default function GamesPage({ onLogout }) {
   // Show game result when winner detected
   useEffect(() => {
     if (!winner || !state.activeGameId) return;
-    console.log("🎯 Winner detected:", winner, "Game:", state.activeGameId);
     const result =
       winner === "X" || winner === "WIN"
         ? "win"
@@ -308,7 +305,6 @@ export default function GamesPage({ onLogout }) {
             ? "draw"
             : "draw";
     setGameResult(result);
-    console.log("🏆 Game result set:", result);
   }, [winner, state.activeGameId]);
 
   // Auto-finish session when game ends
@@ -320,12 +316,6 @@ export default function GamesPage({ onLogout }) {
 
     const finishSession = async () => {
       try {
-        console.log(
-          "🎲 Finishing session - Winner:",
-          winner,
-          "Game:",
-          state.activeGameId,
-        );
         const result =
           winner === "X" || winner === "WIN"
             ? "win"
@@ -334,7 +324,6 @@ export default function GamesPage({ onLogout }) {
               : winner === "DRAW"
                 ? "draw"
                 : "draw";
-        console.log("📊 Calculated result:", result, "from winner:", winner);
         const finalScore = score;
         const finalTime = timeSeconds;
         const response = await sessionsApi.finish(sessionId, {
@@ -342,11 +331,6 @@ export default function GamesPage({ onLogout }) {
           score: finalScore,
           duration_seconds: finalTime,
         });
-        console.log(
-          "✅ Session finished:",
-          response.session.id,
-          `Score: ${finalScore}, Time: ${finalTime}s, Result: ${result}`,
-        );
       } catch (error) {
         console.error("❌ Failed to finish session:", error);
         // Reset sessionFinished if API call fails
@@ -404,12 +388,6 @@ export default function GamesPage({ onLogout }) {
             console.error("Failed to finish session API call:", err);
           }
         }
-
-        console.log("⏱️ Time limit reached — session finished", {
-          game: state.activeGameId,
-          result,
-          timeSeconds,
-        });
       } catch (err) {
         console.error("Time up handling error:", err);
       }
@@ -564,7 +542,6 @@ export default function GamesPage({ onLogout }) {
               timeSeconds: timeSeconds,
             },
           });
-          console.log("💾 Auto-saved game");
         } catch (error) {
           console.error("Auto-save failed:", error);
         }
