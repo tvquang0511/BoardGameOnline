@@ -16,12 +16,15 @@ const swaggerDocument = YAML.load("./openapi.yaml");
 const app = express();
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: process.env.NODE_ENV === "development" ? true : ["http://localhost:23346"],
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+  ],
+  credentials: true,
+}));
+
+
+
 app.use(express.json());
 app.use(morgan("dev"));
 
