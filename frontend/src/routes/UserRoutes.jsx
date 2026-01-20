@@ -12,7 +12,6 @@ import Achievements from "../pages/client/Achievements";
 import Ranking from "../pages/client/Ranking";
 import EditProfile from "../pages/client/EditProfile";
 import AppearanceSettings from "../pages/client/AppearanceSettings";
-import GameSelection from "../pages/client/GameSelection";
 
 export default function UserRoutes({ onLogout, isAuthenticated }) {
   return (
