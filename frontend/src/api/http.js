@@ -9,7 +9,7 @@ export const http = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
-    "x-api-key": API_KEY,
+    "x-api-key": "your_super_secret_api_key_value",
   },
   withCredentials: true,
 
