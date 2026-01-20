@@ -23,7 +23,8 @@ app.use(cors({
     "http://localhost:5173"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
   credentials: true
 }));
 
