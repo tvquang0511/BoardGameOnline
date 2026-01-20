@@ -86,7 +86,7 @@ export default function GameSelection({ onLogout }) {
             >
               <CardContent className="p-4 flex flex-col items-center gap-3">
                 <div
-                  className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${game.color} flex items-center justify-center text-3xl cursor-pointer transition-transform group-hover:scale-110`}
+                  className={`w-16 h-16 rounded-2xl ${game.color} flex items-center justify-center text-3xl cursor-pointer transition-transform group-hover:scale-110`}
                   onClick={() => handleGameClick(game.id)}
                 >
                   {game.emoji}
