@@ -3,13 +3,13 @@ import axios from "axios";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://boardgameonline.onrender.com/api";
 
 // NEW: x-api-key from .env (Vite requires VITE_ prefix)
-const API_KEY = import.meta.env.VITE_API_KEY || "your_super_secret_api_key_value";
+const API_KEY = "your_super_secret_api_key_value";
 
 export const http = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
-    "x-api-key": "your_super_secret_api_key_value",
+    "x-api-key": API_KEY,
   },
   withCredentials: true,
 
