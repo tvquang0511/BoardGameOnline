@@ -19,6 +19,7 @@ app.use(helmet());
 app.use(cors({
   origin: [
     "http://localhost:5173",
+    "https://vercel.com/vuquangs-projects-2943ee1c/board-game-online/GuR5YECWBWTxKoK2y8vJJgL9B4GQ",
   ],
   credentials: true,
 }));
