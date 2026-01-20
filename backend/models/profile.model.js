@@ -30,7 +30,7 @@ module.exports = {
         db.raw("sum(case when result='win' then 1 else 0 end)::int as wins"),
         db.raw("sum(case when result='lose' then 1 else 0 end)::int as loses"),
         db.raw("sum(case when result='draw' then 1 else 0 end)::int as draws"),
-        db.raw("coalesce(max(score), 0)::int as best_score")
+        db.raw("coalesce(max(score), 0)::int as best_score"),
       )
       .first();
 
@@ -54,7 +54,7 @@ module.exports = {
       .join(
         "achievements",
         "user_achievements.achievement_id",
-        "achievements.id"
+        "achievements.id",
       )
       .where({ "user_achievements.user_id": user_id })
       .whereNotNull("user_achievements.unlocked_at")
@@ -67,7 +67,7 @@ module.exports = {
         "achievements.points",
         "achievements.icon",
         "achievements.color",
-        "user_achievements.unlocked_at"
+        "user_achievements.unlocked_at",
       )
       .orderBy("achievements.points", "desc")
       .orderBy("user_achievements.unlocked_at", "desc")
@@ -88,8 +88,8 @@ module.exports = {
         db.raw("count(*)::int as plays"),
         db.raw("sum(case when result='win' then 1 else 0 end)::int as wins"),
         db.raw(
-          "round(avg(case when result='win' then 100 else 0 end))::int as win_rate"
-        )
+          "round(avg(case when result='win' then 100 else 0 end))::int as win_rate",
+        ),
       )
       .orderBy("plays", "desc")
       .limit(limit);
@@ -142,6 +142,29 @@ module.exports = {
       };
     } catch (err) {
       console.error("Add game points error:", err);
+      return null;
+    }
+  },
+
+  async getGlobalRank(user_id) {
+    try {
+      const profile = await db(TABLE).where({ user_id }).first();
+      if (!profile) return null;
+
+      // Count how many users have more points than this user
+      // Only count users who have played at least one game (same as leaderboard logic)
+      const result = await db(TABLE)
+        .join("users", "profiles.user_id", "users.id")
+        .join("game_results", "profiles.user_id", "game_results.user_id")
+        .where("users.is_enabled", true)
+        .where("profiles.points", ">", profile.points)
+        .countDistinct("profiles.user_id as count")
+        .first();
+
+      const rank = parseInt(result.count, 10) + 1;
+      return rank;
+    } catch (err) {
+      console.error("Get global rank error:", err);
       return null;
     }
   },

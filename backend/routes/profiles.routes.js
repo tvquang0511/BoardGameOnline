@@ -9,5 +9,6 @@ router.patch("/me", profiles.updateMe);
 router.get("/me/stats", profiles.myStats);
 router.get("/me/top-achievements", profiles.topAchievements);
 router.get("/me/favorite-games", profiles.favoriteGames);
+router.get("/me/global-rank", profiles.myGlobalRank);
 
 module.exports = router;

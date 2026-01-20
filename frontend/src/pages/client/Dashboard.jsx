@@ -19,6 +19,7 @@ export default function Dashboard({ onLogout }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [myAchievements, setMyAchievements] = useState([]);
+  const [globalRank, setGlobalRank] = useState(null);
 
   // recent games (infinite scroll)
   const [recentGames, setRecentGames] = useState([]);
@@ -35,13 +36,15 @@ export default function Dashboard({ onLogout }) {
     let mounted = true;
     (async () => {
       try {
-        const [p, a] = await Promise.all([
+        const [p, a, r] = await Promise.all([
           profilesApi.me(),
           achievementsApi.my(),
+          profilesApi.myGlobalRank(),
         ]);
         if (!mounted) return;
         setProfile(p.profile);
         setMyAchievements(a.achievements || []);
+        setGlobalRank(r.rank);
       } catch {
         // TODO(API): error state
       }
@@ -124,10 +127,9 @@ export default function Dashboard({ onLogout }) {
         name: "Tổng điểm",
         value: (profile?.points ?? 0).toLocaleString("vi-VN"),
         icon: Star,
-        color: "from-yellow-400 to-orange-500",
+        bgColor: "bg-yellow-500",
       },
       {
-        // show most-played game's name (or fallback)
         name: "Trò chơi ưa thích",
         value: mostPlayed?.game?.name
           ? `${mostPlayed.game.name}`
@@ -135,22 +137,22 @@ export default function Dashboard({ onLogout }) {
             ? "Đang tải..."
             : "Chưa có",
         icon: Gamepad2,
-        color: "from-blue-400 to-blue-600",
+        bgColor: "bg-blue-400",
       },
       {
         name: "Thành tựu",
         value: `${unlockedCount}/10`,
         icon: Target,
-        color: "from-green-400 to-green-600",
+        bgColor: "bg-green-600",
       },
       {
         name: "Hạng",
-        value: "#42",
+        value: globalRank ? `#${globalRank}` : "#--",
         icon: Trophy,
-        color: "from-purple-400 to-purple-600",
+        bgColor: "bg-purple-600",
       },
     ];
-  }, [profile, unlockedCount, mostPlayed, mostPlayedLoading]);
+  }, [profile, unlockedCount, mostPlayed, mostPlayedLoading, globalRank]);
 
   return (
     <Layout onLogout={onLogout}>
@@ -172,9 +174,7 @@ export default function Dashboard({ onLogout }) {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardDescription>{stat.name}</CardDescription>
-                    <div
-                      className={`p-2 rounded-lg bg-gradient-to-br ${stat.color}`}
-                    >
+                    <div className={`p-2 rounded-lg ${stat.bgColor}`}>
                       <Icon className="w-5 h-5 text-white" />
                     </div>
                   </div>
@@ -195,9 +195,7 @@ export default function Dashboard({ onLogout }) {
           </CardHeader>
           <CardContent className="flex gap-4">
             <Link to="/games">
-              <Button className="bg-gradient-to-r from-blue-500 to-purple-600">
-                Chơi ngay
-              </Button>
+              <Button className="bg-blue-600">Chơi ngay</Button>
             </Link>
             <Link to="/achievements">
               <Button variant="outline">Xem thành tựu</Button>

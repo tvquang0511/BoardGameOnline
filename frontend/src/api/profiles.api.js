@@ -25,4 +25,8 @@ export const profilesApi = {
       .get("/profiles/me/favorite-games", { params: { limit } })
       .then((r) => r.data);
   },
+  myGlobalRank() {
+    // GET /api/profiles/me/global-rank
+    return http.get("/profiles/me/global-rank").then((r) => r.data);
+  },
 };

@@ -430,6 +430,32 @@ paths:
                         wins: { type: integer }
                         win_rate: { type: string, example: "75%" }
 
+  /profiles/me/global-rank:
+    get:
+      tags: [Profiles]
+      summary: Get my global rank
+      description: Returns the user's global ranking based on total points (only counting users who have played at least one game)
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rank:
+                    type: integer
+                    example: 6
+                    description: Global rank position
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
   /games:
     get:
       tags: [Games]

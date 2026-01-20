@@ -39,7 +39,7 @@ export default function Achievements({ onLogout }) {
     const lockedList = achievements.filter((a) => !a.unlocked_at);
 
     const categorySet = new Set(
-      achievements.map((a) => a.category || "gameplay")
+      achievements.map((a) => a.category || "gameplay"),
     );
 
     return {
@@ -129,7 +129,7 @@ export default function Achievements({ onLogout }) {
               <CardDescription>Tỷ lệ hoàn thành</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-purple-600">
+              <div className="text-3xl font-bold text-red-600">
                 {totalCount
                   ? Math.round((unlocked.length / totalCount) * 100)
                   : 0}
@@ -218,7 +218,7 @@ export default function Achievements({ onLogout }) {
                             <span className="text-gray-400">•</span>
                             <span className="text-xs text-gray-500">
                               {new Date(
-                                achievement.unlocked_at
+                                achievement.unlocked_at,
                               ).toLocaleDateString("vi-VN")}
                             </span>
                           </div>

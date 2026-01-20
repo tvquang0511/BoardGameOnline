@@ -22,8 +22,8 @@ export default function Layout({ children, onLogout }) {
     Boolean(isAdmin) ||
     Boolean(
       user &&
-        (user.role === "admin" ||
-          (Array.isArray(user.roles) && user.roles.includes("admin"))),
+      (user.role === "admin" ||
+        (Array.isArray(user.roles) && user.roles.includes("admin"))),
     );
 
   const baseNavigation = [
@@ -34,7 +34,7 @@ export default function Layout({ children, onLogout }) {
     { name: "Tin nhắn", href: "/messages", icon: MessageSquare },
     { name: "Thành tựu", href: "/achievements", icon: Trophy },
     { name: "Xếp hạng", href: "/ranking", icon: BarChart3 },
-    { name: "Giao diện", href: "/appearance", icon: Palette }, // Thêm menu Giao diện
+    { name: "Giao diện", href: "/appearance", icon: Palette },
   ];
 
   const navigation = showAdmin
@@ -47,12 +47,10 @@ export default function Layout({ children, onLogout }) {
       <aside className="fixed left-0 top-0 h-screen w-64 bg-card text-card-foreground border-r border-border shadow-sm flex flex-col">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
+            <div className="bg-blue-600 p-2 rounded-lg">
               <Gamepad2 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Board Game
-            </span>
+            <span className="text-xl font-bold text-blue-600">Board Game</span>
           </div>
         </div>
 
@@ -67,7 +65,7 @@ export default function Layout({ children, onLogout }) {
                     to={item.href}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                       isActive
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                        ? "bg-blue-600 text-white"
                         : "text-foreground hover:bg-muted"
                     }`}
                   >
