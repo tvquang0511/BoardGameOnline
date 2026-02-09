@@ -4,7 +4,7 @@ function requireApiKey(req, res, next) {
     return next();
   }
 
-  const expected = "K9fT3ZxA2Qm7BvP8wR5cJH4LNyU0D6E1aSgMtoYVhFqXkWnCipOeIuGdrsblj";
+  const expected = process.env.API_KEY;
 
   // Fail fast nếu thiếu API_KEY
   if (!expected) {
