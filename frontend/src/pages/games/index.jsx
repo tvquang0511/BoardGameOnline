@@ -8,9 +8,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import { useParams, useNavigate } from "react-router-dom";
 import { sessionsApi } from "@/api/sessions.api";
 import { savedGamesApi } from "@/api/savedGames.api";
 import { gamesApi } from "@/api/games.api";
@@ -22,7 +22,6 @@ import { wrap } from "./utils";
 import Board from "./Board";
 import ControlsCard from "./ControlsCard";
 import { GAME_CONFIGS, getGameConfig } from "./games.config";
-import { buildSelectCells, findSelectCell } from "./selectLayout";
 
 import { createCaro, stepCaro, viewCaro } from "./engines/caro";
 import { createTtt, stepTtt, viewTtt } from "./engines/tictactoe";
@@ -36,11 +35,11 @@ import {
   PIXEL_COLORS,
 } from "./engines/pixel";
 
-function initState(boardSize) {
+function initState(boardSize, gameId) {
   return {
     boardSize,
-    mode: "select",
-    activeGameId: null,
+    mode: "play", // Luôn ở mode play
+    activeGameId: gameId,
     cursor: { r: Math.floor(boardSize / 2), c: Math.floor(boardSize / 2) },
 
     caro4: createCaro({ boardSize, winLen: 4 }),
@@ -127,30 +126,27 @@ function reducer(state, action) {
 
 export default function GamesPage({ onLogout }) {
   const { user } = useAuth();
+  const { gameSlug } = useParams(); // Lấy gameSlug từ URL
+  const navigate = useNavigate();
   const DEFAULT_BOARD_SIZE = 15;
-  const [state, dispatch] = useReducer(reducer, DEFAULT_BOARD_SIZE, initState);
 
-  const selectCells = useMemo(
-    () => buildSelectCells(state.boardSize),
-    [state.boardSize],
+  const [state, dispatch] = useReducer(
+    reducer,
+    { boardSize: DEFAULT_BOARD_SIZE, gameId: gameSlug },
+    (init) => initState(init.boardSize, init.gameId)
   );
 
   const [timeSeconds, setTimeSeconds] = useState(0);
-
-  // per-turn counter in seconds
   const [perTurnSeconds, setPerTurnSeconds] = useState(0);
-
   const [showHelp, setShowHelp] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [sessionFinished, setSessionFinished] = useState(false);
-  const [gameResult, setGameResult] = useState(null); // 'win', 'lose', 'draw'
+  const [gameResult, setGameResult] = useState(null);
   const [showContinueDialog, setShowContinueDialog] = useState(false);
-  const [pendingGameId, setPendingGameId] = useState(null);
   const [autoSaveData, setAutoSaveData] = useState(null);
-
-  // Caro difficulty
   const [pendingDefaultConfig, setPendingDefaultConfig] = useState(null);
   const [showDifficultyDialog, setShowDifficultyDialog] = useState(false);
+  const [gameLoaded, setGameLoaded] = useState(false);
 
   // Review dialog
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -174,7 +170,82 @@ export default function GamesPage({ onLogout }) {
     };
   }, []);
 
-  // Winner detection (only real game-end conditions)
+  // Auto-load game từ URL params
+  useEffect(() => {
+    if (!gameSlug || gameLoaded) return;
+
+    const loadGame = async () => {
+      try {
+        const gameMeta = await gamesApi.getBySlug(gameSlug);
+        if (!gameMeta) {
+          alert("Không tìm thấy game.");
+          navigate("/games-list");
+          return;
+        }
+
+        const gm = gameMeta.game ?? gameMeta;
+        if (gm.status !== "active") {
+          alert("Game này hiện không thể chơi (inactive).");
+          navigate("/games-list");
+          return;
+        }
+
+        const defaultConfig = gm.default_config || {};
+        const { init: initialState, boardSize } = buildInitialGameState(
+          gameSlug,
+          defaultConfig
+        );
+        setPendingDefaultConfig(defaultConfig);
+
+        // Check for auto-save
+        try {
+          const { saved } = await savedGamesApi.list({ gameSlug });
+          const autoSave = saved.find((s) => s.name === "__autosave__");
+          if (autoSave) {
+            setAutoSaveData(autoSave);
+            setShowContinueDialog(true);
+            setGameLoaded(true);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to check auto-save:", error);
+        }
+
+        // Nếu là caro, hỏi độ khó
+        if (gameSlug === "caro4" || gameSlug === "caro5") {
+          setShowDifficultyDialog(true);
+          setGameLoaded(true);
+          return;
+        }
+
+        // Start game ngay
+        dispatch({
+          type: "SET_MODE",
+          mode: "play",
+          activeGameId: gameSlug,
+          boardSize,
+        });
+        dispatch({
+          type: "GAME",
+          gameId: gameSlug,
+          gameAction: { type: "RESTORE_STATE", state: initialState },
+        });
+        setTimeSeconds(0);
+        setSessionId(null);
+        setSessionFinished(false);
+        setGameResult(null);
+        setGameLoaded(true);
+      } catch (error) {
+        console.error("Failed to load game metadata:", error);
+        alert("Không thể khởi động game lúc này.");
+        navigate("/games-list");
+      }
+    };
+
+    loadGame();
+  }, [gameSlug, gameLoaded, navigate]);
+
+  // Winner detection
   const winner = (() => {
     const id = state.activeGameId;
     if (!id) return null;
@@ -182,16 +253,10 @@ export default function GamesPage({ onLogout }) {
     if (id === "caro4") return state.caro4.winner;
     if (id === "caro5") return state.caro5.winner;
     if (id === "tictactoe") return state.tictactoe.winner;
-
     if (id === "memory") return state.memory.done ? "WIN" : null;
-
     if (id === "snake") return state.snake.dead ? "LOSE" : null;
-
-    // match3: don't auto-win by score — only end by time/session. So return null here.
     if (id === "match3") return null;
-
     if (id === "pixel") {
-      // win when all painted
       const allPainted =
         state.pixel.pixels && state.pixel.pixels.every(Boolean);
       return allPainted ? "WIN" : null;
@@ -200,9 +265,7 @@ export default function GamesPage({ onLogout }) {
     return null;
   })();
 
-  // Determine lock state: when player lost, lock input except ESC (BACK)
   const isLocked = (() => {
-    // consider both normalized gameResult and raw winner values
     const lostByResult = gameResult === "lose";
     const lostByWinner = winner === "O" || winner === "LOSE";
     return lostByResult || lostByWinner;
@@ -232,7 +295,7 @@ export default function GamesPage({ onLogout }) {
           gameId: "snake",
           gameAction: { type: "TICK" },
         }),
-      ms,
+      ms
     );
     return () => clearInterval(t);
   }, [
@@ -253,7 +316,7 @@ export default function GamesPage({ onLogout }) {
           gameId: "memory",
           gameAction: { type: "TICK" },
         }),
-      650,
+      650
     );
     return () => clearTimeout(t);
   }, [state.mode, state.activeGameId, state.memory.lock]);
@@ -291,7 +354,7 @@ export default function GamesPage({ onLogout }) {
       }
     };
     startSession();
-  }, [state.mode, state.activeGameId, user, sessionId]);
+  }, [state.mode, state.activeGameId, user, sessionId, state]);
 
   // Show game result when winner detected
   useEffect(() => {
@@ -311,7 +374,6 @@ export default function GamesPage({ onLogout }) {
   useEffect(() => {
     if (!winner || !sessionId || !state.activeGameId || sessionFinished) return;
 
-    // Set sessionFinished immediately to prevent multiple calls
     setSessionFinished(true);
 
     const finishSession = async () => {
@@ -326,14 +388,13 @@ export default function GamesPage({ onLogout }) {
                 : "draw";
         const finalScore = score;
         const finalTime = timeSeconds;
-        const response = await sessionsApi.finish(sessionId, {
+        await sessionsApi.finish(sessionId, {
           result,
           score: finalScore,
           duration_seconds: finalTime,
         });
       } catch (error) {
         console.error("❌ Failed to finish session:", error);
-        // Reset sessionFinished if API call fails
         setSessionFinished(false);
       }
     };
@@ -344,7 +405,6 @@ export default function GamesPage({ onLogout }) {
   // Time limit watcher (match-level)
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
-    // For caro4, caro5 and tictactoe we treat timeLimitSeconds as per-turn, not match-level
     if (["caro4", "caro5", "tictactoe"].includes(state.activeGameId)) return;
 
     const gs = state[state.activeGameId];
@@ -354,19 +414,15 @@ export default function GamesPage({ onLogout }) {
 
     const handleTimeUp = async () => {
       try {
-        // Stop everything immediately: set gameResult and sessionFinished so all timers/effects stop
         const isSnake = state.activeGameId === "snake";
         const result = isSnake ? "win" : "lose";
 
         setGameResult(result);
         setPerTurnSeconds(0);
-        // mark finished immediately so intervals stop
         setSessionFinished(true);
 
-        // Normalize a winner-like flag into the game state so UI/engines that read winner can reflect finished state.
         const currentGameState = state[state.activeGameId] || {};
         const normalizedWinner = result === "lose" ? "LOSE" : "WIN";
-        // For snake, set dead=true so winner detection (snake.dead) reports LOSE
         const patchedState = { ...currentGameState, winner: normalizedWinner };
         if (state.activeGameId === "snake") patchedState.dead = true;
 
@@ -377,7 +433,6 @@ export default function GamesPage({ onLogout }) {
         });
 
         if (sessionId) {
-          // finish session remotely but don't wait before stopping UI/timers
           try {
             await sessionsApi.finish(sessionId, {
               result,
@@ -397,7 +452,6 @@ export default function GamesPage({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeSeconds, state.mode, state.activeGameId, sessionId, sessionFinished]);
 
-  // buildInitialGameState (same as before)
   const buildInitialGameState = (gameId, defaultConfig = {}) => {
     const cols = defaultConfig?.board?.cols ?? state.boardSize;
     const rows = defaultConfig?.board?.rows ?? state.boardSize;
@@ -447,71 +501,9 @@ export default function GamesPage({ onLogout }) {
 
   const onSelect = async () => {
     const { r, c } = state.cursor;
-    if (state.mode === "select") {
-      const cell = findSelectCell(selectCells, r, c);
-      if (!cell) return;
-      try {
-        const gameMeta = await gamesApi.getBySlug(cell.gameId);
-        if (!gameMeta) {
-          alert("Không tìm thấy game.");
-          return;
-        }
-        const gm = gameMeta.game ?? gameMeta;
-        if (gm.status !== "active") {
-          alert("Game này hiện không thể chơi (inactive).");
-          return;
-        }
-        const defaultConfig = gm.default_config || {};
-        const { init: initialState, boardSize } = buildInitialGameState(
-          cell.gameId,
-          defaultConfig,
-        );
-        setPendingDefaultConfig(defaultConfig);
-
-        try {
-          const { saved } = await savedGamesApi.list({ gameSlug: cell.gameId });
-          const autoSave = saved.find((s) => s.name === "__autosave__");
-          if (autoSave) {
-            setPendingGameId(cell.gameId);
-            setAutoSaveData(autoSave);
-            setShowContinueDialog(true);
-            return;
-          }
-        } catch (error) {
-          console.error("Failed to check auto-save:", error);
-        }
-
-        if (cell.gameId === "caro4" || cell.gameId === "caro5") {
-          setPendingGameId(cell.gameId);
-          setShowDifficultyDialog(true);
-          return;
-        }
-
-        dispatch({
-          type: "SET_MODE",
-          mode: "play",
-          activeGameId: cell.gameId,
-          boardSize,
-        });
-        dispatch({
-          type: "GAME",
-          gameId: cell.gameId,
-          gameAction: { type: "RESTORE_STATE", state: initialState },
-        });
-        setTimeSeconds(0);
-        setSessionId(null);
-        setSessionFinished(false);
-        setGameResult(null);
-        return;
-      } catch (error) {
-        console.error("Failed to load game metadata:", error);
-        alert("Không thể khởi động game lúc này.");
-        return;
-      }
-    }
-
     const id = state.activeGameId;
     if (!id) return;
+
     if (id === "snake") {
       dispatch({
         type: "GAME",
@@ -520,7 +512,7 @@ export default function GamesPage({ onLogout }) {
       });
       return;
     }
-    // if locked (player lost) do not allow selecting moves
+
     if (isLocked) return;
     dispatch({
       type: "GAME",
@@ -546,19 +538,12 @@ export default function GamesPage({ onLogout }) {
           console.error("Auto-save failed:", error);
         }
       }
-      dispatch({ type: "RESET_GAME" });
-      dispatch({ type: "SET_BOARD_SIZE", boardSize: DEFAULT_BOARD_SIZE });
-      dispatch({ type: "SET_MODE", mode: "select", activeGameId: null });
-      setTimeSeconds(0);
-      setSessionId(null);
-      setSessionFinished(false);
-      setGameResult(null);
-      setPerTurnSeconds(0);
+      // Quay lại trang chọn game
+      navigate("/games-list");
     }
   };
 
   const onAction = (a) => {
-    // Lock behavior: when player lost, only allow BACK (ESC). Ignore everything else.
     if (isLocked && a !== "BACK") return;
 
     if (a === "HELP") {
@@ -589,14 +574,14 @@ export default function GamesPage({ onLogout }) {
 
   useEffect(
     () => attachInput({ onAction }),
-    [state.mode, state.activeGameId, state.cursor, selectCells, isLocked],
+    [state.mode, state.activeGameId, state.cursor, isLocked]
   );
 
   const handleContinueGame = async () => {
     try {
       const { saved } = await savedGamesApi.getById(autoSaveData.id);
       const restored = saved.data.gameState;
-      const gmResp = await gamesApi.getBySlug(pendingGameId);
+      const gmResp = await gamesApi.getBySlug(gameSlug);
       const gm = gmResp.game ?? gmResp;
       const defaultConfig = gm?.default_config ?? {};
       const cols =
@@ -624,7 +609,7 @@ export default function GamesPage({ onLogout }) {
         0;
       const merged = { ...restored, boardSize, winScore, timeLimitSeconds };
       if (
-        (pendingGameId === "caro4" || pendingGameId === "caro5") &&
+        (gameSlug === "caro4" || gameSlug === "caro5") &&
         !merged.aiLevel
       ) {
         merged.aiLevel =
@@ -636,12 +621,12 @@ export default function GamesPage({ onLogout }) {
       dispatch({
         type: "SET_MODE",
         mode: "play",
-        activeGameId: pendingGameId,
+        activeGameId: gameSlug,
         boardSize,
       });
       dispatch({
         type: "GAME",
-        gameId: pendingGameId,
+        gameId: gameSlug,
         gameAction: { type: "RESTORE_STATE", state: merged },
       });
       setTimeSeconds(saved.data.timeSeconds || 0);
@@ -651,7 +636,6 @@ export default function GamesPage({ onLogout }) {
       setShowContinueDialog(false);
       await savedGamesApi.remove(autoSaveData.id);
       setPendingDefaultConfig(null);
-      setPendingGameId(null);
       setPerTurnSeconds(0);
     } catch (error) {
       console.error("Continue failed:", error);
@@ -662,8 +646,8 @@ export default function GamesPage({ onLogout }) {
   const handleStartFresh = async () => {
     try {
       if (autoSaveData) await savedGamesApi.remove(autoSaveData.id);
-      if (pendingGameId) {
-        const gmResp = await gamesApi.getBySlug(pendingGameId);
+      if (gameSlug) {
+        const gmResp = await gamesApi.getBySlug(gameSlug);
         const gm = gmResp.game ?? gmResp;
         if (!gm || gm.status !== "active") {
           alert("Game không khả dụng.");
@@ -671,25 +655,25 @@ export default function GamesPage({ onLogout }) {
           return;
         }
         const defaultConfig = gm.default_config || {};
-        if (pendingGameId === "caro4" || pendingGameId === "caro5") {
+        if (gameSlug === "caro4" || gameSlug === "caro5") {
           setPendingDefaultConfig(defaultConfig);
           setShowDifficultyDialog(true);
           setShowContinueDialog(false);
           return;
         }
         const { init: initialState, boardSize } = buildInitialGameState(
-          pendingGameId,
-          defaultConfig,
+          gameSlug,
+          defaultConfig
         );
         dispatch({
           type: "SET_MODE",
           mode: "play",
-          activeGameId: pendingGameId,
+          activeGameId: gameSlug,
           boardSize,
         });
         dispatch({
           type: "GAME",
-          gameId: pendingGameId,
+          gameId: gameSlug,
           gameAction: { type: "RESTORE_STATE", state: initialState },
         });
       }
@@ -705,17 +689,17 @@ export default function GamesPage({ onLogout }) {
   };
 
   const handleStartCaroWithDifficulty = async (difficulty) => {
-    if (!pendingGameId) return;
+    if (!gameSlug) return;
     try {
       let defaultConfig = pendingDefaultConfig;
       if (!defaultConfig) {
-        const gmResp = await gamesApi.getBySlug(pendingGameId);
+        const gmResp = await gamesApi.getBySlug(gameSlug);
         const gm = gmResp.game ?? gmResp;
         defaultConfig = gm?.default_config ?? {};
       }
       const { init: initialState, boardSize } = buildInitialGameState(
-        pendingGameId,
-        defaultConfig || {},
+        gameSlug,
+        defaultConfig || {}
       );
       initialState.aiLevel = difficulty;
       initialState.winScore =
@@ -731,12 +715,12 @@ export default function GamesPage({ onLogout }) {
       dispatch({
         type: "SET_MODE",
         mode: "play",
-        activeGameId: pendingGameId,
+        activeGameId: gameSlug,
         boardSize,
       });
       dispatch({
         type: "GAME",
-        gameId: pendingGameId,
+        gameId: gameSlug,
         gameAction: { type: "RESTORE_STATE", state: initialState },
       });
       setTimeSeconds(0);
@@ -745,7 +729,6 @@ export default function GamesPage({ onLogout }) {
       setGameResult(null);
       setShowDifficultyDialog(false);
       setPendingDefaultConfig(null);
-      setPendingGameId(null);
       setPerTurnSeconds(0);
     } catch (err) {
       console.error("Failed to start caro with difficulty", err);
@@ -762,11 +745,10 @@ export default function GamesPage({ onLogout }) {
     activeGameState?.winScore ?? activeGameState?.win_score ?? null;
 
   useEffect(() => {
-    // reset per-turn counter whenever turn or active game changes
     setPerTurnSeconds(0);
   }, [activeGameState?.turn, state.activeGameId]);
 
-  // per-turn timer: only for tictactoe, caro4, caro5 (treat timeLimitSeconds as per-turn)
+  // per-turn timer
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId || sessionFinished) return;
     if (!["caro4", "caro5", "tictactoe"].includes(state.activeGameId)) return;
@@ -786,7 +768,6 @@ export default function GamesPage({ onLogout }) {
       setPerTurnSeconds((prev) => {
         const next = prev + 1;
         if (next >= limit) {
-          // dispatch timeout for this game's current turn
           dispatch({
             type: "GAME",
             gameId: state.activeGameId,
@@ -812,7 +793,7 @@ export default function GamesPage({ onLogout }) {
     winner,
   ]);
 
-  // auto-invoke AI when active game's turn === "CPU"
+  // auto-invoke AI when turn === "CPU"
   useEffect(() => {
     if (state.mode !== "play" || !state.activeGameId) return;
     const ag = activeGameState;
@@ -821,14 +802,12 @@ export default function GamesPage({ onLogout }) {
     if (winner || sessionFinished) return;
 
     let mounted = true;
-    const thinkDelay = 80; // ms - small UX delay
+    const thinkDelay = 80;
 
     const runAI = async () => {
-      // small delay so UI can render "CPU thinking"
       await new Promise((res) => setTimeout(res, thinkDelay));
       if (!mounted) return;
 
-      // If useApiAI enabled, try remote AI first
       if (ag.useApiAI) {
         try {
           const resp = await fetch("/api/ai/caro-move", {
@@ -853,11 +832,9 @@ export default function GamesPage({ onLogout }) {
           return;
         } catch (err) {
           console.error("AI API failed, falling back to local AI:", err);
-          // fallthrough to local fallback
         }
       }
 
-      // Local fallback: dispatch CPU_MOVE with index=null so stepCaro uses localPick
       dispatch({
         type: "GAME",
         gameId: state.activeGameId,
@@ -875,25 +852,12 @@ export default function GamesPage({ onLogout }) {
     state.activeGameId,
     activeGameState?.turn,
     activeGameState?.useApiAI,
-    activeGameState?.board?.length, // re-run if board changes
+    activeGameState?.board?.length,
     winner,
     sessionFinished,
   ]);
 
-  function getHelpForGame(gameId, mode) {
-    if (mode === "select") {
-      return (
-        <>
-          <div>• Di chuyển: WASD / ↑↓←→</div>
-          <div>• Chọn: Enter / Space</div>
-          <div>• Nhấn E để xem hướng dẫn trò chơi cụ thể.</div>
-          <div>
-            • Chọn game: di chuyển đến ô có màu tương ứng trên bàn và nhấn
-            Enter.
-          </div>
-        </>
-      );
-    }
+  function getHelpForGame(gameId) {
     switch (gameId) {
       case "caro4":
       case "caro5":
@@ -977,22 +941,6 @@ export default function GamesPage({ onLogout }) {
   }
 
   const getCellView = (r, c) => {
-    if (state.mode === "select") {
-      const cell = findSelectCell(selectCells, r, c);
-      if (cell) {
-        const cfg = getGameConfig(cell.gameId);
-        return {
-          bgClass: cfg.selectColorBg,
-          text: cfg.emoji,
-          textClass: "text-sm",
-          ring: true,
-          noBorder: true,
-          title: `Chọn: ${cfg.name}`,
-        };
-      }
-      return null;
-    }
-
     const id = state.activeGameId;
     if (id === "caro4") return viewCaro({ state: state.caro4, r, c });
     if (id === "caro5") return viewCaro({ state: state.caro5, r, c });
@@ -1004,11 +952,8 @@ export default function GamesPage({ onLogout }) {
     return null;
   };
 
-  // Allow reset even when locked/finished. Reset restores a fresh initial state
-  // using default_config if available (so new rules apply).
   const handleResetGame = async () => {
     const id = state.activeGameId;
-    // If no active game, just do generic reset
     if (!id) {
       dispatch({ type: "RESET_GAME" });
       setTimeSeconds(0);
@@ -1020,7 +965,6 @@ export default function GamesPage({ onLogout }) {
     }
 
     try {
-      // Prefer pendingDefaultConfig (if we have it), otherwise fetch game metadata
       let defaultConfig = pendingDefaultConfig;
       if (!defaultConfig) {
         try {
@@ -1035,7 +979,7 @@ export default function GamesPage({ onLogout }) {
       if (defaultConfig) {
         const { init: initialState, boardSize } = buildInitialGameState(
           id,
-          defaultConfig,
+          defaultConfig
         );
         dispatch({
           type: "SET_MODE",
@@ -1049,11 +993,9 @@ export default function GamesPage({ onLogout }) {
           gameAction: { type: "RESTORE_STATE", state: initialState },
         });
       } else {
-        // fallback to simple reset via reducer
         dispatch({ type: "RESET_GAME" });
       }
 
-      // reset UI/session timers/flags
       setTimeSeconds(0);
       setPerTurnSeconds(0);
       setSessionId(null);
@@ -1075,11 +1017,26 @@ export default function GamesPage({ onLogout }) {
     setShowHelp((v) => !v);
   };
 
+  if (!gameLoaded) {
+    return (
+      <Layout onLogout={onLogout}>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="text-4xl mb-4">🎮</div>
+            <p className="text-xl">Đang tải game...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout onLogout={onLogout}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Board Games</h1>
+          <h1 className="text-4xl font-bold mb-2">
+            {activeConfig?.name || "Board Games"}
+          </h1>
         </div>
 
         <ControlsCard
@@ -1155,9 +1112,7 @@ export default function GamesPage({ onLogout }) {
         <Card className="bg-card text-card-foreground border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              {state.mode === "select"
-                ? "Chọn game (7 ô màu)"
-                : `Đang chơi: ${activeConfig?.name || ""}`}
+              Đang chơi: {activeConfig?.name || ""}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1175,7 +1130,7 @@ export default function GamesPage({ onLogout }) {
               <CardTitle className="text-base">Hướng dẫn</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              {getHelpForGame(state.activeGameId, state.mode)}
+              {getHelpForGame(state.activeGameId)}
             </CardContent>
           </Card>
         ) : null}
@@ -1213,8 +1168,7 @@ export default function GamesPage({ onLogout }) {
                 variant="outline"
                 onClick={() => {
                   setShowDifficultyDialog(false);
-                  setPendingGameId(null);
-                  setPendingDefaultConfig(null);
+                  navigate("/games-list");
                 }}
               >
                 Hủy
@@ -1231,88 +1185,6 @@ export default function GamesPage({ onLogout }) {
             </div>
           </DialogContent>
         </Dialog>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {GAME_CONFIGS.map((g) => {
-            const gameMeta = gamesMetadata.find((gm) => gm.slug === g.id);
-            const avgRating = gameMeta?.average_rating;
-            const reviewCount = gameMeta?.review_count || 0;
-
-            return (
-              <Card key={g.id} className="overflow-hidden">
-                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                  <div
-                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${g.legendGradient} flex items-center justify-center text-3xl`}
-                  >
-                    {g.emoji}
-                  </div>
-                  <h3 className="font-semibold text-sm">{g.name}</h3>
-                  <div className="text-xs text-muted-foreground">
-                    Chọn bằng ô màu trên bàn
-                  </div>
-
-                  {/* Rating Display */}
-                  <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">
-                      {avgRating ? parseFloat(avgRating).toFixed(1) : "N/A"}
-                    </span>
-                    <span className="text-gray-400">({reviewCount})</span>
-                  </div>
-
-                  {/* Review Button */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full text-xs h-7"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      // If we don't have gameMeta yet, fetch it
-                      let gameId = gameMeta?.id;
-                      if (!gameId) {
-                        try {
-                          const gameData = await gamesApi.getBySlug(g.id);
-                          gameId = gameData.game.id;
-                        } catch (error) {
-                          console.error("Failed to get game:", error);
-                          return;
-                        }
-                      }
-                      setSelectedGameForReview({
-                        id: gameId,
-                        name: g.name,
-                      });
-                      setReviewDialogOpen(true);
-                    }}
-                  >
-                    Đánh giá
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Review Dialog */}
-        {selectedGameForReview && (
-          <GameReviewsDialog
-            gameId={selectedGameForReview.id}
-            gameName={selectedGameForReview.name}
-            open={reviewDialogOpen}
-            onOpenChange={(open) => {
-              setReviewDialogOpen(open);
-              if (!open) {
-                // Reload games metadata when dialog closes to refresh ratings
-                gamesApi
-                  .list({ all: false })
-                  .then((data) => {
-                    setGamesMetadata(data.games || []);
-                  })
-                  .catch(console.error);
-              }
-            }}
-          />
-        )}
       </div>
     </Layout>
   );

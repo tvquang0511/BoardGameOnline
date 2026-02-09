@@ -15,6 +15,8 @@ const FALLBACK_STYLE_BY_SLUG = {
   match3: { color: "from-purple-400 to-pink-500", emoji: "💎" },
   candy: { color: "from-pink-400 to-rose-500", emoji: "🍬" },
   sudoku: { color: "from-orange-400 to-red-500", emoji: "🔢" },
+  memory: { color: "from-indigo-400 to-purple-500", emoji: "🧠" },
+  pixel: { color: "from-teal-400 to-cyan-500", emoji: "🎨" },
 };
 
 export default function GameSelection({ onLogout }) {
@@ -59,7 +61,8 @@ export default function GameSelection({ onLogout }) {
   }, [games]);
 
   const handleGameClick = (gameSlug) => {
-    navigate(`/games`);
+    // Navigate đến trang game với gameSlug trong URL
+    navigate(`/games/${gameSlug}`);
   };
 
   const handleReviewClick = (e, game) => {
@@ -82,12 +85,12 @@ export default function GameSelection({ onLogout }) {
           {view.map((game) => (
             <Card
               key={game.id}
-              className="transition-all hover:shadow-xl group"
+              className="transition-all hover:shadow-xl hover:scale-105 cursor-pointer group"
+              onClick={() => handleGameClick(game.id)}
             >
               <CardContent className="p-4 flex flex-col items-center gap-3">
                 <div
-                  className={`w-16 h-16 rounded-2xl ${game.color} flex items-center justify-center text-3xl cursor-pointer transition-transform group-hover:scale-110`}
-                  onClick={() => handleGameClick(game.id)}
+                  className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${game.color} flex items-center justify-center text-4xl transition-transform group-hover:scale-110 shadow-lg`}
                 >
                   {game.emoji}
                 </div>
@@ -134,11 +137,11 @@ export default function GameSelection({ onLogout }) {
           <CardContent className="p-6">
             <h3 className="font-semibold text-lg mb-2">💡 Mẹo chơi game</h3>
             <ul className="space-y-2 text-sm text-gray-700">
-              <li>• Sử dụng phím mũi tên ←↑→↓ hoặc Left/Right để di chuyển</li>
+              <li>• Click vào card game để bắt đầu chơi</li>
+              <li>• Sử dụng phím mũi tên ←↑→↓ để di chuyển trong game</li>
               <li>• Nhấn ENTER để chọn/xác nhận</li>
-              <li>• Nhấn Back để quay lại</li>
-              <li>• Nhấn Hint/Help để xem gợi ý khi cần</li>
-              <li>• Sử dụng Save để lưu tiến trình, Load để tải lại</li>
+              <li>• Nhấn ESC/Back để quay lại menu chọn game</li>
+              <li>• Nhấn E/Help để xem gợi ý khi cần</li>
             </ul>
           </CardContent>
         </Card>

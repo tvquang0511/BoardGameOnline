@@ -39,8 +39,9 @@ export default function UserRoutes({ onLogout, isAuthenticated }) {
         }
       />
 
+      {/* Route mới: chơi game với gameSlug */}
       <Route
-        path="/games"
+        path="/games/:gameSlug"
         element={
           isAuthenticated ? (
             <GamesPage onLogout={onLogout} />
@@ -50,8 +51,17 @@ export default function UserRoutes({ onLogout, isAuthenticated }) {
         }
       />
 
-      {/* Bạn có thể xoá route /game/:gameId vì theo đề chọn game nằm trên bàn */}
-      {/* <Route path="/game/:gameId" ... /> */}
+      {/* Route cũ: vào trang game không có slug (fallback) */}
+      <Route
+        path="/games"
+        element={
+          isAuthenticated ? (
+            <Navigate to="/games-list" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
 
       <Route
         path="/profile"
