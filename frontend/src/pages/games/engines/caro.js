@@ -594,15 +594,15 @@ export function viewCaro({ state, r, c }) {
   const v = state.board[i];
   if (v === "X")
     return {
-      bgClass: "bg-background",
-      text: "X",
-      textClass: "text-sm font-bold text-blue-600",
+      bgClass: "bg-red-100 dark:bg-red-900/30",
+      text: "❌",
+      textClass: "text-2xl",
     };
   if (v === "O")
     return {
-      bgClass: "bg-background",
-      text: "O",
-      textClass: "text-sm font-bold text-red-600",
+      bgClass: "bg-blue-100 dark:bg-blue-900/30",
+      text: "⭕",
+      textClass: "text-2xl",
     };
   return null;
 }

@@ -65,6 +65,11 @@ function reducer(state, action) {
     return s;
   }
 
+  if (action.type === "SET_CURSOR") {
+    s.cursor = action.cursor;
+    return s;
+  }
+
   if (action.type === "SET_MODE") {
     s.mode = action.mode;
     s.activeGameId = action.activeGameId ?? null;
@@ -150,25 +155,26 @@ export default function GamesPage({ onLogout }) {
 
   // Review dialog
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
-  const [selectedGameForReview, setSelectedGameForReview] = useState(null);
-  const [gamesMetadata, setGamesMetadata] = useState([]);
+  const [currentGameMeta, setCurrentGameMeta] = useState(null);
 
-  // Load games metadata with ratings
+  // Load current game metadata
   useEffect(() => {
+    if (!gameSlug) return;
     let mounted = true;
     (async () => {
       try {
-        const data = await gamesApi.list({ all: false });
+        const data = await gamesApi.getBySlug(gameSlug);
         if (!mounted) return;
-        setGamesMetadata(data.games || []);
+        const gm = data.game ?? data;
+        setCurrentGameMeta(gm);
       } catch (error) {
-        console.error("Failed to load games metadata:", error);
+        console.error("Failed to load game metadata:", error);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [gameSlug]);
 
   // Auto-load game từ URL params
   useEffect(() => {
@@ -521,6 +527,25 @@ export default function GamesPage({ onLogout }) {
     });
   };
 
+  // Handle cell click (chuột)
+  const handleCellClick = (r, c) => {
+    const id = state.activeGameId;
+    if (!id || isLocked) return;
+
+    // Snake không hỗ trợ click chuột
+    if (id === "snake") return;
+
+    // Di chuyển cursor đến vị trí click
+    dispatch({ type: "SET_CURSOR", cursor: { r, c } });
+
+    // Thực hiện select
+    dispatch({
+      type: "GAME",
+      gameId: id,
+      gameAction: { type: "SELECT", r, c },
+    });
+  };
+
   const onBack = async () => {
     if (state.mode === "play") {
       if (!winner && state.activeGameId) {
@@ -864,17 +889,17 @@ export default function GamesPage({ onLogout }) {
         return (
           <>
             <div>
-              • Mục tiêu: nối {gameId === "caro4" ? "4" : "5"} ô 'X' liên tiếp
+              • Mục tiêu: nối {gameId === "caro4" ? "4" : "5"} quân liên tiếp
               theo hàng, cột hoặc chéo.
             </div>
-            <div>• Bạn là 'X', CPU là 'O'.</div>
+            <div>• Bạn là ⭕, CPU là ❌.</div>
             <div>
               • Độ khó AI: Easy = random; Medium = block + tấn công; Hard =
               heuristic lookahead.
             </div>
-            <div>• Chọn ô: di chuyển con trỏ đến ô và nhấn Enter.</div>
+            <div>• Click chuột hoặc di chuyển con trỏ (↑↓←→) + Enter để chọn ô.</div>
             <div>
-              • Thời gian mỗi nước (per-turn):{" "}
+              • Thời gian mỗi nước:{" "}
               {activeGameState?.timeLimitSeconds ??
                 activeGameState?.time_limit_seconds ??
                 "không giới hạn"}{" "}
@@ -885,9 +910,10 @@ export default function GamesPage({ onLogout }) {
       case "tictactoe":
         return (
           <>
-            <div>• Tic-tac-toe 3x3 ở giữa bàn. Bạn là 'X'.</div>
+            <div>• Tic-tac-toe 3x3 ở giữa bàn.</div>
+            <div>• Click chuột hoặc phím mũi tên + Enter để chọn.</div>
             <div>
-              • Thời gian mỗi nước (per-turn):{" "}
+              • Thời gian mỗi nước:{" "}
               {activeGameState?.timeLimitSeconds ??
                 activeGameState?.time_limit_seconds ??
                 "không giới hạn"}{" "}
@@ -899,40 +925,31 @@ export default function GamesPage({ onLogout }) {
         return (
           <>
             <div>• Điều khiển rắn ăn mồi để tăng điểm.</div>
-            <div>
-              • Không có điều kiện WIN bằng điểm — chỉ thua khi rắn tự va vào
-              mình.
-            </div>
+            <div>• CHỈ dùng phím mũi tên để điều khiển (không hỗ trợ chuột).</div>
+            <div>• Không tự va vào thân mình.</div>
           </>
         );
       case "match3":
         return (
           <>
-            <div>• Đổi chỗ 2 ô lân cận để tạo hàng/3 trở lên.</div>
-            <div>
-              • Mỗi lần xảy ra match (một hoặc nhiều hàng/col) bạn được điểm;
-              win_score được cộng mỗi lần match xảy ra (một lần cho mỗi
-              hàng/col)
-            </div>
+            <div>• Ghép 3 trái cây giống nhau theo hàng hoặc cột.</div>
+            <div>• Click vào 1 trái cây, sau đó click vào trái cây lân cận để đổi chỗ.</div>
+            <div>• Chỉ đổi chỗ nếu tạo được hàng 3+ giống nhau.</div>
           </>
         );
       case "memory":
         return (
           <>
-            <div>
-              • Mở 2 thẻ để tìm cặp giống nhau; hoàn tất tất cả cặp sẽ thắng và
-              nhận win_score.
-            </div>
+            <div>• Lật 2 thẻ để tìm cặp giống nhau.</div>
+            <div>• Click chuột hoặc phím mũi tên + Enter để lật.</div>
+            <div>• Hoàn tất tất cả cặp để thắng.</div>
           </>
         );
       case "pixel":
         return (
           <>
-            <div>• Chọn màu trên ControlsCard rồi tô ô với Enter/Space.</div>
-            <div>
-              • Mỗi 20 ô mới tô được bạn nhận win_score; game kết thúc khi tô
-              hết các ô khả dụng (tất cả ô).
-            </div>
+            <div>• Chọn màu ở trên rồi click chuột hoặc Enter để tô.</div>
+            <div>• Mỗi 20 ô tô được sẽ nhận điểm thưởng.</div>
           </>
         );
       default:
@@ -1120,6 +1137,7 @@ export default function GamesPage({ onLogout }) {
               size={state.boardSize}
               cursor={state.cursor}
               getCellView={getCellView}
+              onCellClick={handleCellClick}
             />
           </CardContent>
         </Card>
@@ -1134,6 +1152,62 @@ export default function GamesPage({ onLogout }) {
             </CardContent>
           </Card>
         ) : null}
+
+        {/* Review Box */}
+        {currentGameMeta && (
+          <Card className="bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 border-2 border-blue-100 dark:border-gray-700">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-md">
+                    <Star className="w-7 h-7 fill-white text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      Đánh giá từ cộng đồng
+                    </CardTitle>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Chia sẻ trải nghiệm của bạn
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-900 px-4 py-2 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-4 h-4 ${
+                          i < Math.round(currentGameMeta.average_rating || 0)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-gray-900 dark:text-white">
+                      {currentGameMeta.average_rating
+                        ? parseFloat(currentGameMeta.average_rating).toFixed(1)
+                        : "N/A"}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {currentGameMeta.review_count || 0} đánh giá
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => setReviewDialogOpen(true)}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-6 text-base shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <span className="mr-2">📝</span>
+                Xem tất cả đánh giá & Viết đánh giá của bạn
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Dialog open={showContinueDialog} onOpenChange={setShowContinueDialog}>
           <DialogContent>
@@ -1185,6 +1259,28 @@ export default function GamesPage({ onLogout }) {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Review Dialog */}
+        {currentGameMeta && (
+          <GameReviewsDialog
+            gameId={currentGameMeta.id}
+            gameName={currentGameMeta.name}
+            open={reviewDialogOpen}
+            onOpenChange={(open) => {
+              setReviewDialogOpen(open);
+              if (!open) {
+                // Reload game metadata to refresh rating
+                gamesApi
+                  .getBySlug(gameSlug)
+                  .then((data) => {
+                    const gm = data.game ?? data;
+                    setCurrentGameMeta(gm);
+                  })
+                  .catch(console.error);
+              }
+            }}
+          />
+        )}
       </div>
     </Layout>
   );

@@ -1,7 +1,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-export default function Board({ size, cursor, getCellView }) {
+export default function Board({ size, cursor, getCellView, onCellClick }) {
   return (
     <div className="w-full overflow-auto">
       <div
@@ -29,9 +29,11 @@ export default function Board({ size, cursor, getCellView }) {
                 v.bgClass,
                 v.textClass,
                 v.ring ? "ring-2 ring-primary" : "",
-                isCursor ? "outline outline-2 outline-primary" : ""
+                isCursor ? "outline outline-2 outline-primary" : "",
+                onCellClick ? "cursor-pointer active:scale-95 transition-transform" : ""
               )}
               title={v.title || ""}
+              onClick={() => onCellClick && onCellClick(r, c)}
             >
               {v.text || ""}
             </div>
